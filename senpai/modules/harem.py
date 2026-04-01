@@ -43,11 +43,11 @@ def parse_rarity(rarity_value) -> int:
     if rarity_value is None:
         return 1
     if isinstance(rarity_value, int):
-        return rarity_value if rarity_value in RARITY_DATA else 1
+        return rarity_value if rarity_value in RARITY_MAP else 1
     if isinstance(rarity_value, str):
         rarity_str = rarity_value.strip()
         if rarity_str.isdigit():
-            return int(rarity_str) if int(rarity_str) in RARITY_DATA else 1
+            return int(rarity_str) if int(rarity_str) in RARITY_MAP else 1
         if rarity_str in EMOJI_TO_RARITY:
             return EMOJI_TO_RARITY[rarity_str]
         for emoji, num in EMOJI_TO_RARITY.items():
