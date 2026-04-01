@@ -107,7 +107,7 @@ def get_rarity_from_string(rarity_value) -> int:
             return int(rarity_str)
 
         # Check emoji
-        for emoji, num in RARITY_EMOJIS.items():
+        for num, emoji in RARITY_EMOJIS.items():
             if emoji in rarity_str:
                 return num
 

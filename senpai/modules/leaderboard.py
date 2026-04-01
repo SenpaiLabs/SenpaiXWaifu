@@ -19,6 +19,31 @@ from senpai import (
 )
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from senpai.utils import to_small_caps
+from cachetools import TTLCache
+import asyncio
+
+CACHE_TTL = 300
+
+class SimpleAsyncCache:
+    def __init__(self):
+        self.cache = TTLCache(maxsize=1000, ttl=CACHE_TTL)
+        self.lock = asyncio.Lock()
+
+    async def get(self, key, ttl=CACHE_TTL):
+        async with self.lock:
+            return self.cache.get(key)
+
+    async def set(self, key, value):
+        async with self.lock:
+            self.cache[key] = value
+
+    async def clear_pattern(self, pattern):
+        async with self.lock:
+            keys_to_delete = [k for k in self.cache.keys() if str(k).startswith(pattern)]
+            for k in keys_to_delete:
+                del self.cache[k]
+
+cache = SimpleAsyncCache()
 
 
 def get_ist_date() -> str:

@@ -408,7 +408,7 @@ async def safe_send_media(
         return True
     except Exception as e:
         # Image failed, fallback to text
-        logger.warning(f"Failed to send image {img_url}: {e}. Falling back to text.")
+        logger.debug(f"Failed to send image {img_url}: {e}. Falling back to text.")
         try:
             await message.reply_text(caption, reply_markup=reply_markup)
             return True
@@ -502,7 +502,7 @@ async def scheck_command(client, message):
         success = await safe_send_media(message, img_url, details_msg, keyboard)
         
         if success:
-            logger.info(f"Scheck: User {message.from_user.id} checked character {character_id}")
+            logger.debug(f"Scheck: User {message.from_user.id} checked character {character_id}")
         else:
             # Last resort error message
             await message.reply_text(

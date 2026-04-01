@@ -240,7 +240,7 @@ async def inlinequery(update: Update, context: CallbackContext) -> None:
             )
         
         elapsed = time.time() - start_time
-        logging.info(f"Inline query processed in {elapsed:.2f}s | Results: {len(results)}")
+        logging.debug(f"Inline query processed in {elapsed:.2f}s | Results: {len(results)}")
         
         await update.inline_query.answer(results, next_offset=next_offset, cache_time=0)
         
