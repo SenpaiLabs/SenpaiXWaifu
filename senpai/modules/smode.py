@@ -51,7 +51,7 @@ async def set_user_sort_preference(user_id: int, rarity_filter):
         {"$set": {"rarity_filter": rarity_filter}},
         upsert=True
     )
-    LOGGER.info(f"User {user_id} set sort preference to rarity: {rarity_filter}")
+    LOGGER.debug(f"User {user_id} set sort preference to rarity: {rarity_filter}")
 
 
 async def get_filtered_characters(user_id: int):
