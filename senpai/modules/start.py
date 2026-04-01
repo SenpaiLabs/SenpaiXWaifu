@@ -29,17 +29,6 @@ def get_keyboard() -> InlineKeyboardMarkup:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_chat.type != "private":
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✦ ᴘʀɪᴠᴀᴛᴇ ᴍᴇssᴀɢᴇ ✦", url=f"https://t.me/{BOT_USERNAME}")]
-        ])
-        await update.message.reply_text(
-            "✨ <b>Sᴇɴᴘᴀɪ Wᴀɪғᴜ Bᴏᴛ ɪs ᴀʟɪᴠᴇ ᴀɴᴅ ʀᴇᴀᴅʏ!</b> ✨\n\nPM me for more commands and guidance.",
-            reply_markup=keyboard,
-            parse_mode='HTML'
-        )
-        return
-
     user = update.effective_user
     if user.is_bot:
         return
@@ -48,45 +37,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     first_name = user.first_name
     username = user.username
 
-    try:
-        result: UpdateResult = await collection.update_one(
-            {"_id": user_id},
-            {
-                "$set": {
-                    "first_name": first_name,
-                    "username": username
+    if update.effective_chat.type == "private":
+        try:
+            result: UpdateResult = await collection.update_one(
+                {"_id": user_id},
+                {
+                    "$set": {
+                        "first_name": first_name,
+                        "username": username
+                    },
+                    "$setOnInsert": {
+                        "started_at": update.message.date if update.message else None
+                    }
                 },
-                "$setOnInsert": {
-                    "started_at": update.message.date if update.message else None
-                }
-            },
-            upsert=True
-        )
-
-        if result.upserted_id is not None:
-            total_users = await collection.count_documents({})
-            username_text = f"@{username}" if username else "ɴᴏ ᴜsᴇʀɴᴀᴍᴇ"
-
-            await context.bot.send_message(
-                chat_id=GROUP_ID,
-                text=f"#ʙᴏᴛsᴛᴀʀᴛ\n\n"
-                     f"ʙᴏᴛ sᴛᴀʀᴛᴇᴅ\n\n"
-                     f"ɴᴀᴍᴇ : <a href='tg://user?id={user_id}'>{escape(first_name or 'User')}</a>\n"
-                     f"ɪᴅ : <code>{user_id}</code>\n"
-                     f"ᴜsᴇʀɴᴀᴍᴇ : {username_text}\n\n"
-                     f"ᴛᴏᴛᴀʟ ᴜsᴇʀs : {total_users}",
-                parse_mode='HTML'
+                upsert=True
             )
 
-    except Exception as e:
-        print(f"Database error in /start: {e}")
+            if result.upserted_id is not None:
+                total_users = await collection.count_documents({})
+                username_text = f"@{username}" if username else "ɴᴏ ᴜsᴇʀɴᴀᴍᴇ"
 
-    await ensure_referral_schema(user_id, username, first_name)
+                await context.bot.send_message(
+                    chat_id=GROUP_ID,
+                    text=f"#ʙᴏᴛsᴛᴀʀᴛ\n\n"
+                         f"ʙᴏᴛ sᴛᴀʀᴛᴇᴅ\n\n"
+                         f"ɴᴀᴍᴇ : <a href='tg://user?id={user_id}'>{escape(first_name or 'User')}</a>\n"
+                         f"ɪᴅ : <code>{user_id}</code>\n"
+                         f"ᴜsᴇʀɴᴀᴍᴇ : {username_text}\n\n"
+                         f"ᴛᴏᴛᴀʟ ᴜsᴇʀs : {total_users}",
+                    parse_mode='HTML'
+                )
 
-    args = context.args
-    if args and args[0].startswith("ref_"):
-        referral_code = args[0][4:]
-        await process_referral_start(user_id, referral_code, context)
+        except Exception as e:
+            print(f"Database error in /start: {e}")
+
+        await ensure_referral_schema(user_id, username, first_name)
+
+        args = context.args
+        if args and args[0].startswith("ref_"):
+            referral_code = args[0][4:]
+            await process_referral_start(user_id, referral_code, context)
 
     video_url = random.choice(VIDEO_URL)
     keyboard = get_keyboard()

@@ -105,7 +105,7 @@ def log_command(func):
     async def wrapper(update: Update, context: CallbackContext, *args, **kwargs):
         user = update.effective_user
         command = update.message.text.split()[0] if update.message.text else "unknown"
-        logger.info(f"Command {command} used by {user.id} ({user.username or user.first_name})")
+        logger.debug(f"Command {command} used by {user.id} ({user.username or user.first_name})")
         try:
             return await func(update, context, *args, **kwargs)
         except Exception as e:
@@ -141,7 +141,7 @@ class ImageUploader:
                     if response.status == 200:
                         result = await response.json()
                         if result.get('success'):
-                            logger.info("ImgBB upload successful")
+                            logger.debug("ImgBB upload successful")
                             return result['data']['url']
                     elif response.status == 429:
                         logger.warning("ImgBB rate limited, will retry...")
@@ -166,7 +166,7 @@ class ImageUploader:
                     if response.status == 200:
                         result = await response.json()
                         if isinstance(result, list) and len(result) > 0:
-                            logger.info("Telegraph upload successful")
+                            logger.debug("Telegraph upload successful")
                             return f"https://telegra.ph{result[0]['src']}"
         except Exception as e:
             logger.warning(f"Telegraph upload failed: {e}")
@@ -188,7 +188,7 @@ class ImageUploader:
                     if response.status == 200:
                         url = await response.text()
                         if url and url.startswith('http'):
-                            logger.info("Catbox upload successful")
+                            logger.debug("Catbox upload successful")
                             return url.strip()
         except Exception as e:
             logger.warning(f"Catbox upload failed: {e}")
@@ -362,7 +362,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
             disable_web_page_preview=True
         )
         
-        logger.info(f"Character {char_id} ({character_name}) added successfully by {update.effective_user.id}")
+        logger.debug(f"Character {char_id} ({character_name}) added successfully by {update.effective_user.id}")
 
     except Exception as e:
         logger.error(f"Upload failed: {str(e)}", exc_info=True)
@@ -411,7 +411,7 @@ async def delete(update: Update, context: CallbackContext) -> None:
                     chat_id=CHARA_CHANNEL_ID,
                     message_id=character['message_id']
                 )
-                logger.info(f"Deleted message {character['message_id']} from channel")
+                logger.debug(f"Deleted message {character['message_id']} from channel")
             except Exception as e:
                 logger.warning(f"Could not delete message from channel: {e}")
                 # Continue anyway
@@ -426,7 +426,7 @@ async def delete(update: Update, context: CallbackContext) -> None:
             f'📺 Anime: {character.get("anime", "Unknown")}',
             parse_mode='HTML'
         )
-        logger.info(f"Character {char_id} deleted by {update.effective_user.id}")
+        logger.debug(f"Character {char_id} deleted by {update.effective_user.id}")
         
     except Exception as e:
         logger.error(f"Delete failed: {e}", exc_info=True)
@@ -563,7 +563,7 @@ async def update(update: Update, context: CallbackContext) -> None:
             f'✨ New Value: <code>{processed_value[:50]}</code>',
             parse_mode='HTML'
         )
-        logger.info(f"Character {char_id} updated by {update.effective_user.id}: {field} = {processed_value[:30]}")
+        logger.debug(f"Character {char_id} updated by {update.effective_user.id}: {field} = {processed_value[:30]}")
 
     except Exception as e:
         logger.error(f"Update failed: {e}", exc_info=True)
@@ -603,7 +603,7 @@ async def stats(update: Update, context: CallbackContext) -> None:
                 text += f"{rarity_name}: <code>{count}</code> [{bar}] {percentage:.1f}%\n"
         
         await update.message.reply_text(text, parse_mode='HTML')
-        logger.info(f"Stats viewed by {update.effective_user.id}")
+        logger.debug(f"Stats viewed by {update.effective_user.id}")
         
     except Exception as e:
         logger.error(f"Stats error: {e}")
