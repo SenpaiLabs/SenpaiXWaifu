@@ -1,0 +1,324 @@
+# (c) @SenpaiLabs
+# SenpaiLabs Developer 
+# Don't Remove Credit 😔
+# Telegram Channel @Senpai_Updates & @THE_DRAGON_SUPPORT
+# Developer @SenpaiLabs
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
+
+from senpai import application, user_collection, LOGGER, db
+from senpai.utils import to_small_caps
+
+# MongoDB collection for storing user sort preferences
+sort_preferences = db.sort_preferences
+
+
+# ---------- Rarity Configuration ----------
+RARITY_OPTIONS = {
+    "all": {"name": "🍃 default", "value": None},
+    "1": {"name": "⚪ Common", "value": 1},
+    "2": {"name": "🔵 Rare", "value": 2},
+    "3": {"name": "🟡 Legendary", "value": 3},
+    "4": {"name": "💮 Special", "value": 4},
+    "5": {"name": "👹 Ancient", "value": 5},
+    "6": {"name": "🎐 Celestial", "value": 6},
+    "7": {"name": "🔮 Epic", "value": 7},
+    "8": {"name": "🪐 Cosmic", "value": 8},
+    "9": {"name": "⚰️ Nightmare", "value": 9},
+    "10": {"name": "🌬️ Frostborn", "value": 10},
+    "11": {"name": "💝 Valentine", "value": 11},
+    "12": {"name": "🌸 Spring", "value": 12},
+    "13": {"name": "🏖️ Tropical", "value": 13},
+    "14": {"name": "🍭 Kawaii", "value": 14},
+    "15": {"name": "🧬 Hybrid", "value": 15}
+}
+
+
+# ---------- Database Functions ----------
+async def get_user_sort_preference(user_id: int):
+    """Get user's current sorting preference."""
+    pref = await sort_preferences.find_one({"user_id": user_id})
+    if pref:
+        return pref.get("rarity_filter")
+    return None  # None means show all
+
+
+async def set_user_sort_preference(user_id: int, rarity_filter):
+    """Set user's sorting preference."""
+    await sort_preferences.update_one(
+        {"user_id": user_id},
+        {"$set": {"rarity_filter": rarity_filter}},
+        upsert=True
+    )
+    LOGGER.info(f"User {user_id} set sort preference to rarity: {rarity_filter}")
+
+
+async def get_filtered_characters(user_id: int):
+    """
+    Get user's characters filtered by their sort preference.
+    Returns: (filtered_characters, rarity_filter, total_count)
+    """
+    # Get user's collection
+    user_data = await user_collection.find_one({"id": user_id})
+    if not user_data or "characters" not in user_data:
+        return [], None, 0
+
+    all_characters = user_data.get("characters", [])
+    total_count = len(all_characters)
+
+    # Get user's filter preference
+    rarity_filter = await get_user_sort_preference(user_id)
+
+    # If no filter, return all
+    if rarity_filter is None:
+        return all_characters, None, total_count
+
+    # Filter by rarity
+    filtered = [char for char in all_characters if char.get("rarity") == rarity_filter]
+
+    return filtered, rarity_filter, total_count
+
+
+# ---------- Helper Function to Create Main Menu Keyboard ----------
+def create_smode_keyboard(current_pref):
+    """Create the main smode menu keyboard with all rarity options."""
+    keyboard = []
+    row = []
+
+    # Add "All Rarities" button first (DEFAULT)
+    row.append(InlineKeyboardButton(
+        to_small_caps("🍃 default") + (" ✓" if current_pref is None else ""),
+        callback_data="smode_all"
+    ))
+    keyboard.append(row)
+
+    # Add rarity buttons (ALL IN SMALL CAPS)
+    row = []
+    for i, (key, data) in enumerate(list(RARITY_OPTIONS.items())[1:], 1):  # Skip "all"
+        is_selected = (current_pref == data["value"])
+        # Convert button text to small caps
+        button_text = to_small_caps(data["name"]) + (" ✓" if is_selected else "")
+
+        row.append(InlineKeyboardButton(
+            button_text,
+            callback_data=f"smode_{key}"
+        ))
+
+        # 3 buttons per row
+        if i % 3 == 0:
+            keyboard.append(row)
+            row = []
+
+    # Add remaining buttons
+    if row:
+        keyboard.append(row)
+
+    # Add Cancel button at the end
+    keyboard.append([
+        InlineKeyboardButton(
+            "❌ " + to_small_caps("Cancel"),
+            callback_data="smode_cancel"
+        )
+    ])
+
+    return keyboard
+
+
+# ---------- Command Handlers ----------
+async def smode_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    /smode command - Opens sorting mode menu with rarity options
+    """
+    user_id = update.effective_user.id
+
+    # Get current preference
+    current_pref = await get_user_sort_preference(user_id)
+
+    # Determine current selection text
+    if current_pref is None:
+        current_text = " " + to_small_caps("All Rarities")
+    else:
+        rarity_info = RARITY_OPTIONS.get(str(current_pref), {})
+        current_text = rarity_info.get("name", "Unknown")
+
+    # Create message with premium emojis
+    caption = (
+        f"<b>✨ {to_small_caps('SMODE')}</b>\n\n"
+        f"🎯 {to_small_caps('Current Model:')} <b>{current_text}</b>\n"
+    )
+
+    # Create keyboard
+    keyboard = create_smode_keyboard(current_pref)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send text message
+    await update.message.reply_text(
+        caption,
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
+
+
+async def smode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle rarity selection button callbacks"""
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    # Handle cancel button
+    if data == "smode_cancel":
+        await query.answer("🚫 Cancelled", show_alert=False)
+        await query.message.delete()
+        return
+
+    # Extract rarity from callback data
+    if data == "smode_all":
+        rarity_filter = None
+        selected_text = "🍃 " + to_small_caps("default")
+    else:
+        rarity_key = data.replace("smode_", "")
+        rarity_info = RARITY_OPTIONS.get(rarity_key)
+
+        if not rarity_info:
+            await query.answer("❌ Invalid selection!", show_alert=True)
+            return
+
+        rarity_filter = rarity_info["value"]
+        selected_text = rarity_info["name"]
+
+    # Save preference
+    await set_user_sort_preference(user_id, rarity_filter)
+
+    # Get updated current preference for refreshing the menu
+    current_pref = await get_user_sort_preference(user_id)
+
+    # Determine current selection text for menu
+    if current_pref is None:
+        current_text = " " + to_small_caps("All Rarities")
+    else:
+        rarity_info = RARITY_OPTIONS.get(str(current_pref), {})
+        current_text = rarity_info.get("name", "Unknown")
+
+    # Update the menu message to show new selection
+    caption = (
+        f"<b>✨ {to_small_caps('SMODE')}</b>\n\n"
+        f"🎯 {to_small_caps('Current Model:')} <b>{current_text}</b>\n"
+    )
+
+    # Create keyboard with updated selection
+    keyboard = create_smode_keyboard(current_pref)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Update the message to refresh checkmarks
+    try:
+        await query.edit_message_text(
+            text=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        LOGGER.error(f"Failed to update smode message: {e}")
+
+    # Show alert notification with success message
+    alert_message = f"{to_small_caps('Your harem will now show only')} {selected_text} {to_small_caps('characters')}"
+    
+    await query.answer(alert_message, show_alert=True)
+
+
+async def open_smode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle opening smode from harem page"""
+    query = update.callback_query
+
+    # Parse user_id from callback data
+    try:
+        _, user_id = query.data.split(':')
+        user_id = int(user_id)
+    except (ValueError, TypeError):
+        await query.answer("Invalid request", show_alert=True)
+        return
+
+    # Check if user owns this harem
+    if query.from_user.id != user_id:
+        await query.answer("This is not your harem!", show_alert=True)
+        return
+
+    await query.answer()
+
+    # Get current preference
+    current_pref = await get_user_sort_preference(user_id)
+
+    # Determine current selection text
+    if current_pref is None:
+        current_text = "🍃 " + to_small_caps("default")
+    else:
+        rarity_info = RARITY_OPTIONS.get(str(current_pref), {})
+        current_text = rarity_info.get("name", "Unknown")
+
+    # Create message with premium emojis
+    caption = (
+        f"<b>✨ {to_small_caps('SMODE')}</b>\n\n"
+        f"🎯 {to_small_caps('Current Model:')} <b>{current_text}</b>\n"
+    )
+
+    # Create keyboard
+    keyboard = create_smode_keyboard(current_pref)
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Delete old message and send new text message
+    try:
+        await query.message.delete()
+        
+        # Send new text message with smode menu
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=caption,
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    except Exception:
+        await query.answer("Failed to open sorting mode", show_alert=True)
+
+
+# ---------- Helper Function for Other Modules ----------
+async def apply_rarity_filter(user_id: int, characters: list):
+    """
+    Apply user's rarity filter to a character list.
+    This function should be called from harem/collection commands.
+    
+    Args:
+        user_id: User ID
+        characters: List of all user characters
+    
+    Returns:
+        Filtered list of characters based on user's preference
+    """
+    rarity_filter = await get_user_sort_preference(user_id)
+
+    # If no filter, return all
+    if rarity_filter is None:
+        return characters
+
+    # Filter by rarity
+    filtered = [char for char in characters if char.get("rarity") == rarity_filter]
+
+    return filtered
+
+
+# ---------- Handler Registration ----------
+def register_handlers():
+    """Register sorting mode handlers with the application."""
+    application.add_handler(CommandHandler("smode", smode_command, block=False))
+    application.add_handler(CallbackQueryHandler(smode_callback, pattern="^smode_", block=False))
+    application.add_handler(CallbackQueryHandler(open_smode_callback, pattern="^open_smode:", block=False))
+    LOGGER.info("Sorting mode handlers registered successfully")
+
+
+# Auto-register handlers when module is imported
+register_handlers()
+
+# (c) @SenpaiLabs
+# SenpaiLabs Developer 
+# Don't Remove Credit 😔
+# Telegram Channel @Senpai_Updates & @THE_DRAGON_SUPPORT
+# Developer @SenpaiLabs
