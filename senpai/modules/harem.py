@@ -295,7 +295,7 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     keyboard.append([
         InlineKeyboardButton(
             "❌ " + to_small_caps("Cancel"),
-            callback_data=f"open_smode:{user_id}"
+            callback_data=f"harem_close:{user_id}"
         )
     ])
     
@@ -359,8 +359,29 @@ async def harem_callback_v3(update: Update, context: CallbackContext):
     await query.answer()
     await harem_v3(update, context, page)
 
+async def harem_close_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    
+    try:
+        _, user_id = query.data.split(':')
+        user_id = int(user_id)
+    except:
+        await query.answer("Invalid", show_alert=True)
+        return
+        
+    if query.from_user.id != user_id:
+        await query.answer("Not Your Harem", show_alert=True)
+        return
+        
+    await query.answer()
+    try:
+        await query.message.delete()
+    except:
+        pass
+
 application.add_handler(CommandHandler(["harem", "collection"], harem_v3, block=False))
 application.add_handler(CallbackQueryHandler(harem_callback_v3, pattern=r'^harem:', block=False))
+application.add_handler(CallbackQueryHandler(harem_close_callback, pattern=r'^harem_close:', block=False))
 
 # (c) @SenpaiLabs
 # SenpaiLabs Developer 
