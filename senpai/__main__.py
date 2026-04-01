@@ -15,6 +15,7 @@ import asyncio
 import logging
 from html import escape
 from typing import Dict, Any, Optional, List, Set
+from cachetools import TTLCache
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
@@ -49,13 +50,16 @@ SPAM_REPEAT_THRESHOLD = 10
 SPAM_IGNORE_SECONDS = 10 * 60
 DEFAULT_MESSAGE_FREQUENCY = 100
 MAX_SPAWN_ATTEMPTS = 10
-locks: Dict[str, asyncio.Lock] = {}
-message_counters: Dict[str, int] = {}
-sent_characters: Dict[int, Set[int]] = {}
-last_characters: Dict[int, Dict[str, Any]] = {}
-first_correct_guesses: Dict[int, int] = {}
-last_user: Dict[str, Dict[str, Any]] = {}
-warned_users: Dict[int, float] = {}
+
+# Memory Leak Optimizations: Auto-cleaning caches
+locks = TTLCache(maxsize=100000, ttl=86400)
+message_counters = TTLCache(maxsize=100000, ttl=86400)
+sent_characters = TTLCache(maxsize=100000, ttl=86400)
+last_characters = TTLCache(maxsize=100000, ttl=86400)
+first_correct_guesses = TTLCache(maxsize=100000, ttl=86400)
+last_user = TTLCache(maxsize=100000, ttl=86400)
+warned_users = TTLCache(maxsize=100000, ttl=86400)
+freq_cache = TTLCache(maxsize=100000, ttl=3600)  # 1 hr cache for frequencies
 
 _escape_markdown_re = re.compile(r'([\\*_`~>#+=\\-|{}.!])')
 def escape_markdown(text: str) -> str:
@@ -162,11 +166,15 @@ async def message_counter(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     async with lock:
         try:
-            chat_frequency = await user_totals_collection.find_one({'chat_id': chat_id_str})
-            message_frequency = (
-                chat_frequency.get('message_frequency', DEFAULT_MESSAGE_FREQUENCY)
-                if chat_frequency else DEFAULT_MESSAGE_FREQUENCY
-            )
+            if chat_id_str in freq_cache:
+                message_frequency = freq_cache[chat_id_str]
+            else:
+                chat_frequency = await user_totals_collection.find_one({'chat_id': chat_id_str})
+                message_frequency = (
+                    chat_frequency.get('message_frequency', DEFAULT_MESSAGE_FREQUENCY)
+                    if chat_frequency else DEFAULT_MESSAGE_FREQUENCY
+                )
+                freq_cache[chat_id_str] = message_frequency
         except Exception:
             message_frequency = DEFAULT_MESSAGE_FREQUENCY
             LOGGER.exception("Error fetching message_frequency; using default")
@@ -240,17 +248,37 @@ async def send_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
                 query['id'] = {'$nin': locked_id_variants}
 
         LOGGER.debug(f"Query: {query}")
-        all_characters = [
-            normalize_character_document(character)
-            for character in await collection.find(query).to_list(length=None)
-        ]
-        LOGGER.debug(f"Found {len(all_characters)} characters after filtering")
+        
+        pipeline = []
+        if query:
+            pipeline.append({'$match': query})
+            
+        sent_in_chat = list(sent_characters.get(chat_id, set()))
+        if sent_in_chat:
+            pipeline_exclude = list(pipeline)
+            pipeline_exclude.append({'$match': {'id': {'$nin': sent_in_chat}}})
+            pipeline_exclude.append({'$sample': {'size': 1}})
+            cursor = collection.aggregate(pipeline_exclude)
+            docs = await cursor.to_list(length=1)
+            
+            if not docs:
+                # If exhausted, wipe history and pull normally
+                sent_characters[chat_id] = set()
+                pipeline_no_ex = list(pipeline)
+                pipeline_no_ex.append({'$sample': {'size': 1}})
+                cursor = collection.aggregate(pipeline_no_ex)
+                docs = await cursor.to_list(length=1)
+        else:
+            pipeline_no_ex = list(pipeline)
+            pipeline_no_ex.append({'$sample': {'size': 1}})
+            cursor = collection.aggregate(pipeline_no_ex)
+            docs = await cursor.to_list(length=1)
 
     except Exception:
         LOGGER.exception("Failed to fetch characters from DB")
-        all_characters = []
+        docs = []
 
-    if not all_characters:
+    if not docs:
         try:
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -260,20 +288,9 @@ async def send_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             LOGGER.exception("Failed to notify about empty collection")
         return
 
+    character = normalize_character_document(docs[0])
     sent_characters.setdefault(chat_id, set())
 
-    if len(sent_characters[chat_id]) >= len(all_characters):
-        sent_characters[chat_id] = set()
-
-    choices = [
-        c for c in all_characters
-        if normalize_character_id(c.get('id')) not in sent_characters[chat_id]
-    ]
-    if not choices:
-        choices = all_characters
-        sent_characters[chat_id] = set()
-
-    character = random.choice(choices)
     LOGGER.debug(f"Selected: ID={character.get('id')}, Rarity={character.get('rarity')}")
 
     normalized_character_id = normalize_character_id(character.get('id'))
@@ -438,46 +455,6 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "ᴘʟᴇᴀꜱᴇ ᴡʀɪᴛᴇ ᴛʜᴇ ᴄᴏʀʀᴇᴄᴛ ᴄʜᴀʀᴀᴄᴛᴇʀ ɴᴀᴍᴇ."
         )
 
-async def fav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not update.effective_user:
-        return
-
-    user_id = update.effective_user.id
-    args = context.args or []
-    if not args:
-        await update.message.reply_text("ᴘʟᴇᴀꜱᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ: /fav <ɪᴅ>")
-        return
-
-    try:
-        character_id = int(args[0])
-    except ValueError:
-        await update.message.reply_text("ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ ᴍᴜꜱᴛ ʙᴇ ᴀ ɴᴜᴍʙᴇʀ.")
-        return
-
-    try:
-        user = await user_collection.find_one({'id': user_id})
-    except Exception:
-        LOGGER.exception("Failed to fetch user for fav")
-        user = None
-
-    if not user or not user.get('characters'):
-        await update.message.reply_text("ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴄᴏʟʟᴇᴄᴛᴇᴅ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ʏᴇᴛ.")
-        return
-
-    character = next((c for c in user['characters'] if character_matches_id(c, character_id)), None)
-    if not character:
-        await update.message.reply_text("ᴛʜᴀᴛ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪꜱ ɴᴏᴛ ɪɴ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ.")
-        return
-
-    try:
-        await user_collection.update_one({'id': user_id}, {'$addToSet': {'favorites': character_id}})
-        await update.message.reply_text(
-            f"ᴄʜᴀʀᴀᴄᴛᴇʀ {character.get('name')} ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ꜰᴀᴠᴏʀɪᴛᴇꜱ."
-        )
-    except Exception:
-        LOGGER.exception("Failed to set favorite character")
-        await update.message.reply_text("ꜰᴀɪʟᴇᴅ ᴛᴏ ᴍᴀʀᴋ ꜰᴀᴠᴏʀɪᴛᴇ. ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
-
 
 async def updatebot(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ── Owner-only guard ──────────────────────────────────────────────────────
@@ -528,7 +505,6 @@ def main() -> None:
     application.add_handler(CommandHandler(
         ["guess", "protecc", "collect", "grab", "hunt"], guess, block=False
     ))
-    application.add_handler(CommandHandler("fav", fav, block=False))
     application.add_handler(CommandHandler("true", updatebot))
     application.add_handler(MessageHandler(filters.ALL, message_counter, block=False))
 

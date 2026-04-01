@@ -7,6 +7,7 @@
 import logging
 from typing import Optional, List, Dict, Any
 from html import escape
+from cachetools import TTLCache
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
@@ -23,6 +24,9 @@ from senpai.utils import to_small_caps, RARITY_MAP, RARITY_TEXT_TO_NUMBER
 
 rarity_settings_collection = db.rarity_settings
 locked_characters_collection = db.locked_characters
+
+disabled_rarities_cache = TTLCache(maxsize=100000, ttl=300)
+locked_characters_cache = TTLCache(maxsize=1, ttl=300)
 
 def is_authorized(user_id: int) -> bool:
     return is_owner_or_sudo(user_id)
@@ -102,6 +106,8 @@ async def set_on(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             upsert=True
         )
         
+        disabled_rarities_cache.pop(chat_id, None)
+        
         await update.message.reply_text(
             to_small_caps(f"Rarity {RARITY_MAP[rarity_num]} has been enabled for spawning in this group!")
         )
@@ -160,6 +166,8 @@ async def set_off(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             {'$set': {'disabled_rarities': disabled_rarities}},
             upsert=True
         )
+        
+        disabled_rarities_cache.pop(chat_id, None)
         
         await update.message.reply_text(
             to_small_caps(f"Rarity {RARITY_MAP[rarity_num]} has been disabled for spawning in this group!")
@@ -221,6 +229,7 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         }
         
         await locked_characters_collection.insert_one(lock_data)
+        locked_characters_cache.clear()
         
         await update.message.reply_text(
             to_small_caps(
@@ -271,6 +280,7 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             return
         
         await locked_characters_collection.delete_one(character_id_query(character_id, 'character_id'))
+        locked_characters_cache.clear()
         
         await update.message.reply_text(
             to_small_caps(
@@ -342,6 +352,9 @@ async def can_character_spawn(character_id: int, rarity: int, chat_id: int) -> t
     return True, None
 
 async def get_disabled_rarities(chat_id: int) -> List[int]:
+    if chat_id in disabled_rarities_cache:
+        return disabled_rarities_cache[chat_id]
+        
     try:
         settings = await get_chat_rarity_settings(chat_id)
         disabled = settings.get('disabled_rarities', [])
@@ -353,12 +366,16 @@ async def get_disabled_rarities(chat_id: int) -> List[int]:
             elif isinstance(r, str) and r.isdigit():
                 normalized.append(int(r))
         
+        disabled_rarities_cache[chat_id] = normalized
         return normalized
     except Exception as e:
         LOGGER.exception(f"Error getting disabled rarities: {e}")
         return []
 
 async def get_locked_character_ids() -> List[int]:
+    if "locked" in locked_characters_cache:
+        return locked_characters_cache["locked"]
+        
     try:
         locked_chars = await locked_characters_collection.find({}).to_list(length=None)
         normalized_ids = []
@@ -366,6 +383,8 @@ async def get_locked_character_ids() -> List[int]:
             character_id = normalize_character_id(char.get('character_id'))
             if character_id is not None:
                 normalized_ids.append(character_id)
+                
+        locked_characters_cache["locked"] = normalized_ids
         return normalized_ids
     except Exception as e:
         LOGGER.exception(f"Error getting locked character IDs: {e}")
