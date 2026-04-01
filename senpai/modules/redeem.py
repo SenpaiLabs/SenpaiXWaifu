@@ -72,7 +72,7 @@ async def create_coin_code(amount: int, max_uses: int, created_by: int) -> Optio
             
             try:
                 await redeem_codes_collection.insert_one(document)
-                LOGGER.info(f"Created coin code: {code} for {amount} coins, max uses: {max_uses}")
+                LOGGER.debug(f"Created coin code: {code} for {amount} coins, max uses: {max_uses}")
                 return code
             except Exception as insert_err:
                 if "duplicate key" in str(insert_err).lower() or "E11000" in str(insert_err):
@@ -113,7 +113,7 @@ async def create_character_code(character_id: int, max_uses: int, created_by: in
             
             try:
                 await redeem_codes_collection.insert_one(document)
-                LOGGER.info(f"Created character code: {code} for character {character_id}, max uses: {max_uses}")
+                LOGGER.debug(f"Created character code: {code} for character {character_id}, max uses: {max_uses}")
                 return code
             except Exception as insert_err:
                 if "duplicate key" in str(insert_err).lower() or "E11000" in str(insert_err):
@@ -478,7 +478,7 @@ async def sgen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         await update.message.reply_text(response, parse_mode="HTML")
 
-        LOGGER.info(f"Generated character code {code} for ID {character_id} ({character_name}) by user {user_id}")
+        LOGGER.debug(f"Generated character code {code} for ID {character_id} ({character_name}) by user {user_id}")
     else:
         await update.message.reply_text(
             f"❌ {to_small_caps('Failed to generate code. Please try again.')}"
@@ -520,7 +520,7 @@ def register_handlers():
     application.add_handler(CommandHandler("gen", gen_command, block=False))
     application.add_handler(CommandHandler("sgen", sgen_command, block=False))
     application.add_handler(CommandHandler("redeem", redeem_command, block=False))
-    LOGGER.info("Redeem system handlers registered successfully")
+    LOGGER.debug("Redeem system handlers registered successfully")
 
 register_handlers()
 

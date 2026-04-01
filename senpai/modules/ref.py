@@ -330,7 +330,7 @@ async def process_referral_start(new_user_id: int, referral_code: str, context: 
         {"$addToSet": {"referral.pending_referrals": new_user_id}},
     )
 
-    LOGGER.info(f"Referral pending: {new_user_id} referred by {referrer_id}")
+    LOGGER.debug(f"Referral pending: {new_user_id} referred by {referrer_id}")
 
 
 async def verify_and_reward_referral(new_user_id: int, referrer_id: int, context: ContextTypes.DEFAULT_TYPE):
@@ -448,7 +448,7 @@ async def verify_and_reward_referral(new_user_id: int, referrer_id: int, context
 
     await change_balance(referrer_id, reward)
 
-    LOGGER.info(
+    LOGGER.debug(
         f"Referral verified: referrer={referrer_id}, new_user={new_user_id}, "
         f"reward={reward}, streak={new_streak}, tier={new_tier}"
     )
@@ -977,7 +977,7 @@ async def background_verification_task(context: ContextTypes.DEFAULT_TYPE):
                     {"id": referrer_id},
                     {"$pull": {"referral.pending_referrals": pending_user_id}},
                 )
-                LOGGER.info(f"Expired pending referral: {pending_user_id} from referrer {referrer_id}")
+                LOGGER.debug(f"Expired pending referral: {pending_user_id} from referrer {referrer_id}")
                 continue
 
             if ref_data.get("is_verified"):
@@ -985,7 +985,7 @@ async def background_verification_task(context: ContextTypes.DEFAULT_TYPE):
 
             verified = await verify_and_reward_referral(pending_user_id, referrer_id, context)
             if verified:
-                LOGGER.info(f"Background verification success: {pending_user_id} → {referrer_id}")
+                LOGGER.debug(f"Background verification success: {pending_user_id} → {referrer_id}")
 
     today_str = get_utc_date_str()
     yesterday_str = get_utc_date_str(time.time() - 86400)
@@ -1013,7 +1013,7 @@ async def background_verification_task(context: ContextTypes.DEFAULT_TYPE):
             {"id": {"$in": expired_ids}},
             {"$set": {"referral.streak": 0}},
         )
-        LOGGER.info(f"Reset streaks for {len(expired_ids)} users")
+        LOGGER.debug(f"Reset streaks for {len(expired_ids)} users")
 
 
 async def start_referral_background_job(application):

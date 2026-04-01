@@ -86,7 +86,7 @@ async def create_database_backup():
             serializable_data = [convert_to_json_serializable(doc) for doc in data]
             
             backup_data['collections'][coll_name] = serializable_data
-            LOGGER.info(f"Backed up {len(data)} documents from {coll_name}")
+            LOGGER.debug(f"Backed up {len(data)} documents from {coll_name}")
         except Exception as e:
             LOGGER.error(f"Error backing up {coll_name}: {e}")
             backup_data['collections'][coll_name] = {'error': str(e)}
@@ -132,7 +132,7 @@ async def restore_database_backup(backup_data):
                     
                     await coll.insert_many(data)
                     restored_counts[coll_name] = len(data)
-                    LOGGER.info(f"Restored {len(data)} documents to {coll_name}")
+                    LOGGER.debug(f"Restored {len(data)} documents to {coll_name}")
                 else:
                     restored_counts[coll_name] = 0
                     
@@ -153,7 +153,7 @@ async def auto_backup_job(context: ContextTypes.DEFAULT_TYPE):
             LOGGER.warning("Auto backup skipped because BACKUP_CHAT_ID is not configured")
             return
 
-        LOGGER.info("Starting automatic database backup...")
+        LOGGER.debug("Starting automatic database backup...")
         backup_data = await create_database_backup()
         
         # Create backup file
@@ -184,7 +184,7 @@ async def auto_backup_job(context: ContextTypes.DEFAULT_TYPE):
                 filename=filename
             )
         
-        LOGGER.info(f"Backup sent successfully to {BACKUP_CHAT_ID}")
+        LOGGER.debug(f"Backup sent successfully to {BACKUP_CHAT_ID}")
         
         # Clean up temp file
         if filepath and os.path.exists(filepath):
@@ -255,7 +255,7 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if filepath and os.path.exists(filepath):
             os.remove(filepath)
         
-        LOGGER.info(f"Manual backup created by user {user_id}")
+        LOGGER.debug(f"Manual backup created by user {user_id}")
         
     except Exception as e:
         LOGGER.error(f"Error in backup command: {e}")
@@ -329,7 +329,7 @@ async def restore_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if filepath and os.path.exists(filepath):
             os.remove(filepath)
         
-        LOGGER.info(f"Database restored by user {user_id}")
+        LOGGER.debug(f"Database restored by user {user_id}")
         
     except Exception as e:
         LOGGER.error(f"Error in restore command: {e}")
@@ -355,9 +355,9 @@ def setup_backup_system():
             interval=3600,
             first=10
         )
-        LOGGER.info("Backup system initialized with auto-backup every 1 hour")
+        LOGGER.debug("Backup system initialized with auto-backup every 1 hour")
     else:
-        LOGGER.info("Backup system initialized without auto-backup")
+        LOGGER.debug("Backup system initialized without auto-backup")
 
 # Auto-initialize when imported
 setup_backup_system()

@@ -122,7 +122,7 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             upsert=True
         )
         
-        LOGGER.info(f"Admin {admin_id} gave character {character_id} ({character_name}) to user {target_user_id}")
+        LOGGER.debug(f"Admin {admin_id} gave character {character_id} ({character_name}) to user {target_user_id}")
         
         # Success message with character image
         success_msg = (

@@ -38,7 +38,7 @@ def namespace_of(chat, update, bot):
 def log_input(update):
     user = update.effective_user.id
     chat = update.effective_chat.id
-    LOGGER.info(f"IN: {update.effective_message.text} (user={user}, chat={chat})")
+    LOGGER.debug(f"IN: {update.effective_message.text} (user={user}, chat={chat})")
 
 
 async def send(msg, bot, update):
@@ -51,7 +51,7 @@ async def send(msg, bot, update):
                 message_thread_id=update.effective_message.message_thread_id if update.effective_chat.is_forum else None
             )
     else:
-        LOGGER.info(f"OUT: '{msg}'")
+        LOGGER.debug(f"OUT: '{msg}'")
         await bot.send_message(
             chat_id=update.effective_chat.id,
             text=f"`{msg}`",

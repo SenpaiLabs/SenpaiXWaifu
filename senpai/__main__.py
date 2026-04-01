@@ -239,12 +239,12 @@ async def send_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             else:
                 query['id'] = {'$nin': locked_id_variants}
 
-        LOGGER.info(f"Query: {query}")
+        LOGGER.debug(f"Query: {query}")
         all_characters = [
             normalize_character_document(character)
             for character in await collection.find(query).to_list(length=None)
         ]
-        LOGGER.info(f"Found {len(all_characters)} characters after filtering")
+        LOGGER.debug(f"Found {len(all_characters)} characters after filtering")
 
     except Exception:
         LOGGER.exception("Failed to fetch characters from DB")
@@ -274,7 +274,7 @@ async def send_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         sent_characters[chat_id] = set()
 
     character = random.choice(choices)
-    LOGGER.info(f"Selected: ID={character.get('id')}, Rarity={character.get('rarity')}")
+    LOGGER.debug(f"Selected: ID={character.get('id')}, Rarity={character.get('rarity')}")
 
     normalized_character_id = normalize_character_id(character.get('id'))
     if normalized_character_id is not None:
@@ -341,7 +341,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 {'$inc': {'balance': 100}},
                 upsert=True
             )
-            LOGGER.info(f"Added 100 coins to user {user_id}")
+            LOGGER.debug(f"Added 100 coins to user {user_id}")
         except Exception as e:
             LOGGER.exception(f"Failed to update user balance: {e}")
 

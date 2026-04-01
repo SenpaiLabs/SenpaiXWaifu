@@ -264,7 +264,7 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
        else:
            await update.message.reply_text(message, parse_mode="HTML")
 
-       LOGGER.info(f"User {user_id} claimed character {character_id} ({character_name}) via /sclaim")
+       LOGGER.debug(f"User {user_id} claimed character {character_id} ({character_name}) via /sclaim")
 
 
 async def claim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -335,7 +335,7 @@ async def claim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
            parse_mode="HTML"
        )
 
-       LOGGER.info(f"User {user_id} generated coin code {coin_code} for {coin_amount} coins")
+       LOGGER.debug(f"User {user_id} generated coin code {coin_code} for {coin_amount} coins")
 
 
 async def credeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -430,7 +430,7 @@ async def credeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
            parse_mode="HTML"
        )
 
-       LOGGER.info(f"User {user_id} redeemed code {code} for {coin_amount} coins")
+       LOGGER.debug(f"User {user_id} redeemed code {code} for {coin_amount} coins")
 
 
 def register_handlers():

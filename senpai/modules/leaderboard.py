@@ -67,7 +67,7 @@ _indexes_initialized = False
 
 async def setup_database_indexes():
     try:
-        LOGGER.info("Setting up database indexes...")
+        LOGGER.debug("Setting up database indexes...")
         
         await user_collection.create_index([("balance", -1)], background=True)
         await user_collection.create_index([("characters", 1)], background=True)
@@ -92,7 +92,7 @@ async def setup_database_indexes():
             background=True
         )
         
-        LOGGER.info("Database indexes created successfully!")
+        LOGGER.debug("Database indexes created successfully!")
     except Exception as e:
         LOGGER.error(f"Error creating indexes: {e}")
 
@@ -102,7 +102,7 @@ async def initialize_leaderboard():
     if not _indexes_initialized:
         await setup_database_indexes()
         _indexes_initialized = True
-        LOGGER.info("Leaderboard indexes initialized!")
+        LOGGER.debug("Leaderboard indexes initialized!")
 
 
 async def update_daily_user_guess(user_id: int, username: str = "", first_name: str = "") -> None:
@@ -134,7 +134,7 @@ async def update_daily_user_guess(user_id: int, username: str = "", first_name: 
         
         await cache.clear_pattern("leaderboard:user:")
         
-        LOGGER.info(f"Daily user guess updated: user_id={user_id}, date={today}")
+        LOGGER.debug(f"Daily user guess updated: user_id={user_id}, date={today}")
     except Exception as e:
         LOGGER.error(f"Error updating daily user guess for user_id {user_id}: {e}")
 
@@ -166,7 +166,7 @@ async def update_daily_group_guess(group_id: int, group_name: str = "") -> None:
         
         await cache.clear_pattern("leaderboard:group:")
         
-        LOGGER.info(f"Daily group guess updated: group_id={group_id}, date={today}")
+        LOGGER.debug(f"Daily group guess updated: group_id={group_id}, date={today}")
     except Exception as e:
         LOGGER.error(f"Error updating daily group guess for group_id {group_id}: {e}")
 
@@ -178,10 +178,10 @@ async def show_char_top() -> str:
         cache_key = "leaderboard:char:top10"
         cached = await cache.get(cache_key, CACHE_TTL)
         if cached:
-            LOGGER.info("Serving character leaderboard from cache")
+            LOGGER.debug("Serving character leaderboard from cache")
             return cached
         
-        LOGGER.info("Generating fresh character leaderboard...")
+        LOGGER.debug("Generating fresh character leaderboard...")
         
         pipeline = [
             {
@@ -229,7 +229,7 @@ async def show_char_top() -> str:
                 message += f'{i}. <b>{display_name}</b> ➾ <b>{character_count}</b>\n'
 
         await cache.set(cache_key, message)
-        LOGGER.info("Character leaderboard generated and cached")
+        LOGGER.debug("Character leaderboard generated and cached")
         
         return message
     except Exception as e:
@@ -242,10 +242,10 @@ async def show_coin_top() -> str:
         cache_key = "leaderboard:coin:top10"
         cached = await cache.get(cache_key, CACHE_TTL)
         if cached:
-            LOGGER.info("Serving coin leaderboard from cache")
+            LOGGER.debug("Serving coin leaderboard from cache")
             return cached
         
-        LOGGER.info("Generating fresh coin leaderboard...")
+        LOGGER.debug("Generating fresh coin leaderboard...")
         
         cursor = user_collection.aggregate([
             {"$sort": {"balance": -1}},
@@ -281,7 +281,7 @@ async def show_coin_top() -> str:
                 message += f'{i}. <b>{display_name}</b> ➾ <b>{balance} coins</b>\n'
 
         await cache.set(cache_key, message)
-        LOGGER.info("Coin leaderboard generated and cached")
+        LOGGER.debug("Coin leaderboard generated and cached")
         
         return message
     except Exception as e:
@@ -296,10 +296,10 @@ async def show_group_top() -> str:
         cache_key = f"leaderboard:group:top10:{today}"
         cached = await cache.get(cache_key, CACHE_TTL)
         if cached:
-            LOGGER.info("Serving group leaderboard from cache")
+            LOGGER.debug("Serving group leaderboard from cache")
             return cached
         
-        LOGGER.info("Generating fresh group leaderboard...")
+        LOGGER.debug("Generating fresh group leaderboard...")
 
         cursor = daily_group_guesses_collection.aggregate([
             {"$match": {"date": today}},
@@ -331,7 +331,7 @@ async def show_group_top() -> str:
             message += f'{i}. <b>{display_name}</b> ➾ <b>{count}</b>\n'
 
         await cache.set(cache_key, message)
-        LOGGER.info("Group leaderboard generated and cached")
+        LOGGER.debug("Group leaderboard generated and cached")
         
         return message
     except Exception as e:
@@ -346,10 +346,10 @@ async def show_group_user_top(chat_id: Optional[int] = None) -> str:
         cache_key = f"leaderboard:user:top10:{today}"
         cached = await cache.get(cache_key, CACHE_TTL)
         if cached:
-            LOGGER.info("Serving user leaderboard from cache")
+            LOGGER.debug("Serving user leaderboard from cache")
             return cached
         
-        LOGGER.info("Generating fresh user leaderboard...")
+        LOGGER.debug("Generating fresh user leaderboard...")
 
         cursor = daily_user_guesses_collection.aggregate([
             {"$match": {"date": today}},
@@ -387,7 +387,7 @@ async def show_group_user_top(chat_id: Optional[int] = None) -> str:
                 message += f'{i}. <b>{display_name}</b> ➾ <b>{count}</b>\n'
 
         await cache.set(cache_key, message)
-        LOGGER.info("User leaderboard generated and cached")
+        LOGGER.debug("User leaderboard generated and cached")
         
         return message
     except Exception as e:

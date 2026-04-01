@@ -105,7 +105,7 @@ async def set_on(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             to_small_caps(f"Rarity {RARITY_MAP[rarity_num]} has been enabled for spawning in this group!")
         )
-        LOGGER.info(f"User {user_id} enabled rarity {rarity_num} in chat {chat_id}")
+        LOGGER.debug(f"User {user_id} enabled rarity {rarity_num} in chat {chat_id}")
         
     except Exception as e:
         LOGGER.exception(f"Error in set_on command: {e}")
@@ -164,7 +164,7 @@ async def set_off(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(
             to_small_caps(f"Rarity {RARITY_MAP[rarity_num]} has been disabled for spawning in this group!")
         )
-        LOGGER.info(f"User {user_id} disabled rarity {rarity_num} in chat {chat_id}")
+        LOGGER.debug(f"User {user_id} disabled rarity {rarity_num} in chat {chat_id}")
         
     except Exception as e:
         LOGGER.exception(f"Error in set_off command: {e}")
@@ -231,7 +231,7 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 f"Locked by: {escape(update.effective_user.first_name)}"
             )
         )
-        LOGGER.info(f"User {user_id} locked character {character_id}")
+        LOGGER.debug(f"User {user_id} locked character {character_id}")
         
     except Exception as e:
         LOGGER.exception(f"Error in lock command: {e}")
@@ -280,7 +280,7 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 f"The character can now spawn in groups!"
             )
         )
-        LOGGER.info(f"User {user_id} unlocked character {character_id}")
+        LOGGER.debug(f"User {user_id} unlocked character {character_id}")
         
     except Exception as e:
         LOGGER.exception(f"Error in unlock command: {e}")
@@ -326,7 +326,7 @@ async def locklist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             await update.message.reply_text(message)
         
-        LOGGER.info(f"User {user_id} viewed locked characters list")
+        LOGGER.debug(f"User {user_id} viewed locked characters list")
         
     except Exception as e:
         LOGGER.exception(f"Error in locklist command: {e}")

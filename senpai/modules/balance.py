@@ -194,7 +194,7 @@ async def change_balance(user_id: int, amount: int) -> int:
         )
         doc = await user_collection.find_one({"id": user_id})
         new_balance = int(doc.get("balance", 0)) if doc else 0
-        LOGGER.info(f"✅ Balance changed for user {user_id}: {amount:+d} -> new balance: {new_balance}")
+        LOGGER.debug(f"✅ Balance changed for user {user_id}: {amount:+d} -> new balance: {new_balance}")
         return new_balance
     except Exception:
         LOGGER.exception("Failed to change balance for %s by %s", user_id, amount)
@@ -230,7 +230,7 @@ async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> boo
             {"$inc": {"balance": amount}}, 
             upsert=True
         )
-        LOGGER.info(f"✅ Transfer successful: {sender_id} -> {receiver_id}, amount: {amount}")
+        LOGGER.debug(f"✅ Transfer successful: {sender_id} -> {receiver_id}, amount: {amount}")
         return True
     except Exception:
         LOGGER.exception("Failed to increment receiver %s; attempting rollback to sender %s", receiver_id, sender_id)
@@ -241,7 +241,7 @@ async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> boo
                 {"$inc": {"balance": amount}}, 
                 upsert=True
             )
-            LOGGER.info(f"✅ Rollback successful for sender {sender_id}")
+            LOGGER.debug(f"✅ Rollback successful for sender {sender_id}")
         except Exception:
             LOGGER.exception("❌ Rollback failed for sender %s after transfer failure", sender_id)
         return False
