@@ -532,13 +532,13 @@ def main() -> None:
     application.add_handler(CommandHandler("true", updatebot))
     application.add_handler(MessageHandler(filters.ALL, message_counter, block=False))
 
-    application.run_polling(drop_pending_updates=True)
-
+    application.run_polling(drop_pending_updates=True, close_loop=False)
 
 if __name__ == "__main__":
     senpaii.start()
     LOGGER.info("Senpai Waifu Bot is Back")
     main()
+    senpaii.stop()
 
 # (c) @SenpaiLabs
 # SenpaiLabs Developer 

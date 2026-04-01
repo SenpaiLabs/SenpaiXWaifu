@@ -30,6 +30,14 @@ def get_keyboard() -> InlineKeyboardMarkup:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_chat.type != "private":
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✦ ᴘʀɪᴠᴀᴛᴇ ᴍᴇssᴀɢᴇ ✦", url=f"https://t.me/{BOT_USERNAME}")]
+        ])
+        await update.message.reply_text(
+            "✨ <b>Sᴇɴᴘᴀɪ Wᴀɪғᴜ Bᴏᴛ ɪs ᴀʟɪᴠᴇ ᴀɴᴅ ʀᴇᴀᴅʏ!</b> ✨\n\nPM me for more commands and guidance.",
+            reply_markup=keyboard,
+            parse_mode='HTML'
+        )
         return
 
     user = update.effective_user
