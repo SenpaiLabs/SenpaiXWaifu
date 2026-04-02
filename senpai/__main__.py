@@ -17,7 +17,7 @@ from html import escape
 from typing import Dict, Any, Optional, List, Set
 from cachetools import TTLCache
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReactionTypeEmoji
 from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
 
 from senpai import (
@@ -409,7 +409,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
         try:
-            await coin_alert_msg.set_reaction(random.choice(["🎉", "❤️", "🔥", "✨", "🏆", "🎁", "⚡", "🌟"]))
+            await coin_alert_msg.set_reaction([ReactionTypeEmoji(emoji=random.choice(["🎉", "❤️", "🔥", "⚡", "🌟", "🎁", "👏", "🏆"]))])
         except Exception as e:
             LOGGER.exception(f"Failed to set reaction: {e}")
 
