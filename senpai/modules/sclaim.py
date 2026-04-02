@@ -16,6 +16,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 
 from senpai import application, user_collection, collection, db, LOGGER
+from senpai.media import copy_character_media_fields, get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display, get_rarity_from_string
 from senpai.config import Config
 SUPPORT_GROUP = f"https://t.me/{Config.SUPPORT_CHAT}"
@@ -217,7 +218,7 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
        character_name = character.get("name", "Unknown")
        anime_name = character.get("anime", "Unknown")
        rarity = get_rarity_from_string(character.get("rarity", 1))
-       img_url = character.get("img_url", "")
+       media_reference = get_character_media_reference(character)
 
        from datetime import datetime, timezone
        now = datetime.now(timezone.utc)
@@ -231,13 +232,12 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
            },
            {
                "$push": {
-                   "characters": {
+                   "characters": copy_character_media_fields(character, {
                        "id": character_id,
                        "name": character_name,
                        "anime": anime_name,
                        "rarity": rarity,
-                       "img_url": img_url
-                   }
+                   })
                },
                "$set": {"last_sclaim": now}
            },
@@ -260,10 +260,10 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
            f"✅ {to_small_caps('Character has been added to your collection!')}"
        )
 
-       if img_url:
+       if media_reference:
            try:
                await update.message.reply_photo(
-                   photo=img_url,
+                   photo=media_reference,
                    caption=message,
                    parse_mode="HTML"
                )

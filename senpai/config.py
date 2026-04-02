@@ -49,6 +49,8 @@ class Config:
     MONGO_URL: str = os.getenv("MONGO_URL", "").strip()
 
     IMGBB_API_KEY: str = os.getenv("IMGBB_API_KEY", "").strip()
+    CATBOX_USERHASH: str = os.getenv("CATBOX_USERHASH", "").strip()
+    TELEGRAPH_TOKEN: str = os.getenv("TELEGRAPH_TOKEN", "").strip()
     BACKUP_CHAT_ID: Optional[int] = _get_optional_int("BACKUP_CHAT_ID")
     ENABLE_AUTO_BACKUP: bool = _get_bool("ENABLE_AUTO_BACKUP", False)
 

@@ -13,6 +13,7 @@ import asyncio
 from functools import wraps
 
 from senpai import senpaii, collection, user_collection
+from senpai.media import get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_MAP
 
 # Configure logging
@@ -209,6 +210,7 @@ async def search_characters_optimized(search_query: str) -> List[Dict]:
                 'anime': 1,
                 'rarity': 1,
                 'img_url': 1,
+                'tg_file_id': 1,
                 '_id': 0
             }
         ):
@@ -491,7 +493,7 @@ async def scheck_command(client, message):
         details_msg = format_character_details(character, total_count, top_grabbers)
 
         # Get character image
-        img_url = character.get('img_url')
+        img_url = get_character_media_reference(character)
 
         # Create keyboard with cancel button
         keyboard = InlineKeyboardMarkup([

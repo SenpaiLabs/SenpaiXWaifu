@@ -21,6 +21,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from senpai import collection, user_collection, application
+from senpai.media import get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, RARITY_MAP, get_rarity_from_string
 
 CACHE_TTL = 300
@@ -144,6 +145,7 @@ class HaremManagerV3:
             "anime": 1, 
             "rarity": 1,
             "img_url": 1, 
+            "tg_file_id": 1,
             "_id": 0
         }
         
@@ -312,10 +314,10 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     if user.get('favorites'):
         fav_id = user['favorites'][0]
         if fav_id in char_details:
-            photo_url = char_details[fav_id].get('img_url')
+            photo_url = get_character_media_reference(char_details[fav_id])
     
     if not photo_url and display_chars:
-        photo_url = display_chars[0].get('img_url')
+        photo_url = get_character_media_reference(display_chars[0])
         
     if len(harem_msg) > 1024:
         photo_url = None

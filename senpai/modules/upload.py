@@ -6,11 +6,11 @@
 
 import io
 import logging
-import random
 import asyncio
 from enum import Enum
 from functools import wraps
 from datetime import datetime
+from typing import Callable, List, Optional, Tuple
 
 from pymongo import ReturnDocument
 import aiohttp
@@ -22,6 +22,7 @@ from telegram.ext import CommandHandler, CallbackContext
 from senpai import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT
 from senpai.character_ids import character_id_query, format_character_id, normalize_character_id
 from senpai.config import Config
+from senpai.media import copy_character_media_fields
 from senpai.security import can_manage_upload_catalog, can_upload_characters
 from senpai.utils import to_small_caps
 
@@ -120,15 +121,16 @@ def log_command(func):
 class ImageUploader:
     def __init__(self):
         self.imgbb_key = Config.IMGBB_API_KEY
-        self.services = [
-            self._upload_to_telegraph,
-            self._upload_to_catbox,
-        ]
+        self.catbox_userhash = Config.CATBOX_USERHASH
+        self.telegraph_token = Config.TELEGRAPH_TOKEN
+        self.services: List[Tuple[str, Callable[[bytes], object]]] = []
         if self.imgbb_key:
-            self.services.insert(0, self._upload_to_imgbb)
+            self.services.append(("ImgBB", self._upload_to_imgbb))
+        self.services.append(("Catbox", self._upload_to_catbox))
+        self.services.append(("Telegraph", self._upload_to_telegraph))
         
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-    async def _upload_to_imgbb(self, image_data: bytes) -> str:
+    async def _upload_to_imgbb(self, image_data: bytes) -> Optional[str]:
         """Upload to ImgBB with retry"""
         try:
             async with aiohttp.ClientSession() as session:
@@ -144,74 +146,112 @@ class ImageUploader:
                     if response.status == 200:
                         result = await response.json()
                         if result.get('success'):
-                            logger.debug("ImgBB upload successful")
-                            return result['data']['url']
+                            image_url = (
+                                result.get('data', {}).get('display_url')
+                                or result.get('data', {}).get('url')
+                            )
+                            if image_url:
+                                logger.info("ImgBB upload successful")
+                                return image_url
                     elif response.status == 429:
                         logger.warning("ImgBB rate limited, will retry...")
                         raise Exception("Rate limited")
+                    else:
+                        logger.warning("ImgBB upload returned status %s", response.status)
         except Exception as e:
             logger.warning(f"ImgBB attempt failed: {e}")
             raise
         return None
 
-    async def _upload_to_telegraph(self, image_data: bytes) -> str:
+    async def _upload_to_telegraph(self, image_data: bytes) -> Optional[str]:
         """Upload to Telegraph"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                data = aiohttp.FormData()
-                data.add_field('file', io.BytesIO(image_data), filename='image.jpg')
-                
-                async with session.post(
-                    "https://telegra.ph/upload",
-                    data=data,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        if isinstance(result, list) and len(result) > 0:
-                            logger.debug("Telegraph upload successful")
-                            return f"https://telegra.ph{result[0]['src']}"
-        except Exception as e:
-            logger.warning(f"Telegraph upload failed: {e}")
+        endpoints = (
+            "https://telegra.ph/upload",
+            "https://graph.org/upload",
+        )
+
+        for endpoint in endpoints:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    data = aiohttp.FormData()
+                    data.add_field('file', io.BytesIO(image_data), filename='image.jpg')
+
+                    async with session.post(
+                        endpoint,
+                        data=data,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        if response.status == 200:
+                            result = await response.json()
+                            if isinstance(result, list) and len(result) > 0 and result[0].get('src'):
+                                logger.info("Telegraph upload successful via %s", endpoint)
+                                return f"https://telegra.ph{result[0]['src']}"
+
+                        body = (await response.text()).strip()
+                        logger.warning(
+                            "Telegraph upload failed via %s with status %s: %s",
+                            endpoint,
+                            response.status,
+                            body[:160] or "<empty>",
+                        )
+            except Exception as e:
+                logger.warning("Telegraph upload failed via %s: %s", endpoint, e)
         return None
 
-    async def _upload_to_catbox(self, image_data: bytes) -> str:
+    async def _upload_to_catbox(self, image_data: bytes) -> Optional[str]:
         """Upload to Catbox"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                data = aiohttp.FormData()
-                data.add_field('reqtype', 'fileupload')
-                data.add_field('fileToUpload', io.BytesIO(image_data), filename='image.jpg')
-                
-                async with session.post(
-                    "https://catbox.moe/user/api.php",
-                    data=data,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        url = await response.text()
-                        if url and url.startswith('http'):
-                            logger.debug("Catbox upload successful")
-                            return url.strip()
-        except Exception as e:
-            logger.warning(f"Catbox upload failed: {e}")
+        modes = []
+        if self.catbox_userhash:
+            modes.append(("authenticated", self.catbox_userhash))
+        modes.append(("anonymous", None))
+
+        for label, userhash in modes:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    data = aiohttp.FormData()
+                    data.add_field('reqtype', 'fileupload')
+                    if userhash:
+                        data.add_field('userhash', userhash)
+                    data.add_field('fileToUpload', io.BytesIO(image_data), filename='image.jpg')
+
+                    async with session.post(
+                        "https://catbox.moe/user/api.php",
+                        data=data,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        body = (await response.text()).strip()
+                        if body.startswith('http'):
+                            logger.info("Catbox upload successful via %s mode", label)
+                            return body
+
+                        if userhash and body == "Not signed in!":
+                            logger.warning("Catbox userhash was rejected; retrying anonymously.")
+                            continue
+
+                        logger.warning(
+                            "Catbox upload failed via %s mode with status %s: %s",
+                            label,
+                            response.status,
+                            body[:160] or "<empty>",
+                        )
+            except Exception as e:
+                logger.warning("Catbox upload failed via %s mode: %s", label, e)
         return None
 
-    async def upload_with_failover(self, image_data: bytes) -> str:
+    async def upload_with_failover(self, image_data: bytes) -> Tuple[Optional[str], Optional[str]]:
         """Try multiple services until one succeeds"""
-        services = self.services.copy()
-        random.shuffle(services)
-        
-        for service in services:
+        for service_name, service in self.services:
             try:
                 url = await service(image_data)
                 if url:
-                    return url
+                    logger.info("Image upload succeeded via %s", service_name)
+                    return url, service_name
             except Exception as e:
-                logger.error(f"Service {service.__name__} failed: {e}")
+                logger.error("Service %s failed: %s", service_name, e)
                 continue
         
-        return None
+        logger.warning("All external upload services failed. Falling back to Telegram file_id storage.")
+        return None, None
 
 async def get_next_sequence_number(sequence_name):
     """Get the next numeric character ID."""
@@ -276,11 +316,20 @@ async def upload(update: Update, context: CallbackContext) -> None:
         await progress_msg.edit_text(f'☁️ <b>{to_small_caps("Uploading to cloud storage")}...</b>\n<i>This may take a few seconds...</i>', parse_mode='HTML')
         
         uploader = ImageUploader()
-        img_url = await uploader.upload_with_failover(bytes(image_bytes))
+        img_url, upload_provider = await uploader.upload_with_failover(bytes(image_bytes))
         
-        if not img_url:
-            await progress_msg.edit_text('❌ Failed to upload image. All hosting services failed.\nPlease try again later.')
-            return
+        if img_url:
+            await progress_msg.edit_text(
+                f'☁️ <b>{to_small_caps("Cloud storage ready")}...</b>\n'
+                f'<i>{upload_provider} {to_small_caps("upload completed")}.</i>',
+                parse_mode='HTML'
+            )
+        else:
+            await progress_msg.edit_text(
+                f'⚠️ <b>{to_small_caps("External hosts failed")}...</b>\n'
+                f'<i>{to_small_caps("Using telegram media fallback so upload still succeeds")}.</i>',
+                parse_mode='HTML'
+            )
 
         await progress_msg.edit_text(f'💾 <b>{to_small_caps("Saving to database")}...</b>', parse_mode='HTML')
         
@@ -288,15 +337,16 @@ async def upload(update: Update, context: CallbackContext) -> None:
         display_char_id = format_character_id(char_id)
         
         character = {
-            'img_url': img_url,
             'name': character_name,
             'anime': anime_name,
             'rarity': rarity,
             'id': char_id,
             'created_at': datetime.utcnow(),
             'added_by': update.effective_user.id,
-            'added_by_name': update.effective_user.first_name
+            'added_by_name': update.effective_user.first_name,
+            'image_host': upload_provider or 'telegram_fallback',
         }
+        character = copy_character_media_fields({'img_url': img_url}, character)
         
         rarity_parts = rarity.split(' ', 1)
         rarity_emoji = rarity_parts[0] if len(rarity_parts) > 1 else "⚪"
@@ -311,21 +361,33 @@ async def upload(update: Update, context: CallbackContext) -> None:
         )
 
         try:
-            message = await context.bot.send_photo(
-                chat_id=CHARA_CHANNEL_ID,
-                photo=img_url,
-                caption=channel_caption,
-                parse_mode='HTML',
-                read_timeout=60,
-                write_timeout=60,
-                connect_timeout=60,
-                pool_timeout=60
-            )
+            if img_url:
+                message = await context.bot.send_photo(
+                    chat_id=CHARA_CHANNEL_ID,
+                    photo=img_url,
+                    caption=channel_caption,
+                    parse_mode='HTML',
+                    read_timeout=60,
+                    write_timeout=60,
+                    connect_timeout=60,
+                    pool_timeout=60
+                )
+            else:
+                message = await context.bot.send_photo(
+                    chat_id=CHARA_CHANNEL_ID,
+                    photo=io.BytesIO(image_bytes),
+                    caption=channel_caption,
+                    parse_mode='HTML'
+                )
             character['message_id'] = message.message_id
             
         except Exception as e:
-            logger.error(f"Channel post failed with URL: {e}")
-            await progress_msg.edit_text(f'⚠️ <b>{to_small_caps("URL failed, sending image directly")}...</b>', parse_mode='HTML')
+            logger.error("Channel post failed with primary media reference: %s", e)
+            await progress_msg.edit_text(
+                f'⚠️ <b>{to_small_caps("Primary channel send failed")}...</b>\n'
+                f'<i>{to_small_caps("Retrying with direct image bytes")}.</i>',
+                parse_mode='HTML'
+            )
             
             message = await context.bot.send_photo(
                 chat_id=CHARA_CHANNEL_ID,
@@ -334,6 +396,16 @@ async def upload(update: Update, context: CallbackContext) -> None:
                 parse_mode='HTML'
             )
             character['message_id'] = message.message_id
+            character['image_host'] = 'telegram_fallback'
+
+        if getattr(message, "photo", None):
+            character['tg_file_id'] = message.photo[-1].file_id
+            logger.info(
+                "Stored character %s using host=%s, tg_file_id cached=%s",
+                display_char_id,
+                character.get('image_host'),
+                bool(character.get('tg_file_id')),
+            )
 
         await collection.insert_one(character)
         
@@ -505,7 +577,12 @@ async def update(update: Update, context: CallbackContext) -> None:
             
             await collection.update_one(
                 character_id_query(char_id),
-                {'$set': {'message_id': new_msg.message_id}}
+                {
+                    '$set': {
+                        'message_id': new_msg.message_id,
+                        'tg_file_id': new_msg.photo[-1].file_id if new_msg.photo else character.get('tg_file_id'),
+                    }
+                }
             )
             
         else:

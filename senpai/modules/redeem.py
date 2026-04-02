@@ -20,6 +20,7 @@ from senpai.character_ids import (
     normalize_character_document,
     normalize_character_id,
 )
+from senpai.media import copy_character_media_fields, get_character_media_reference
 from senpai.security import can_generate_redeem_codes
 from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display
 
@@ -268,16 +269,15 @@ async def redeem_code(code: str, user_id: int) -> Dict[str, Any]:
                 character_name = character.get("name", "Unknown")
                 anime_name = character.get("anime", "Unknown")
                 rarity = character.get("rarity", 1)
-                img_url = character.get("img_url", "")
+                media_reference = get_character_media_reference(character)
                 
                 rarity_display = get_rarity_display(rarity)
-                character_data = normalize_character_document({
+                character_data = normalize_character_document(copy_character_media_fields(character, {
                     "id": character.get("id", character_id),
                     "name": character_name,
                     "anime": anime_name,
                     "rarity": rarity,
-                    "img_url": img_url
-                })
+                }))
 
                 user_doc = await user_collection.find_one({"id": user_id}, {"characters": 1})
                 existing_chars = user_doc.get("characters", []) if user_doc else []
@@ -328,7 +328,7 @@ async def redeem_code(code: str, user_id: int) -> Dict[str, Any]:
                 return {
                     "success": True,
                     "message": message,
-                    "img_url": img_url,
+                    "media_reference": media_reference,
                     "data": {
                         "type": "character",
                         "character_id": character_id,
@@ -504,10 +504,10 @@ async def redeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     result = await redeem_code(code, user_id)
 
     if result["success"]:
-        if result.get("img_url"):
+        if result.get("media_reference"):
             try:
                 await update.message.reply_photo(
-                    photo=result["img_url"],
+                    photo=result["media_reference"],
                     caption=result["message"],
                     parse_mode="HTML"
                 )

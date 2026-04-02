@@ -10,6 +10,7 @@ from telegram.ext import CommandHandler, ContextTypes
 
 from senpai import application, user_collection, collection, LOGGER
 from senpai.character_ids import character_id_query, normalize_character_document
+from senpai.media import copy_character_media_fields, get_character_media_reference
 from senpai.security import can_give_characters
 from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display
 
@@ -88,17 +89,16 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     character_name = character.get("name", "Unknown")
     anime_name = character.get("anime", "Unknown")
     rarity = character.get("rarity", 1)
-    img_url = character.get("img_url", "")
+    media_reference = get_character_media_reference(character)
     rarity_display = get_rarity_display(rarity)
     
     # Prepare character entry
-    character_entry = normalize_character_document({
+    character_entry = normalize_character_document(copy_character_media_fields(character, {
         "id": character.get("id"),
         "name": character.get("name"),
         "anime": character.get("anime"),
         "rarity": character.get("rarity"),
-        "img_url": character.get("img_url")
-    })
+    }))
     
     # Add optional fields if they exist
     optional_fields = ["id_al", "video_url"]
@@ -135,10 +135,10 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
         
         # Try to send with image
-        if img_url:
+        if media_reference:
             try:
                 await update.message.reply_photo(
-                    photo=img_url,
+                    photo=media_reference,
                     caption=success_msg,
                     parse_mode="HTML"
                 )

@@ -20,6 +20,7 @@ from senpai.character_ids import (
     normalize_character_document,
     normalize_character_id,
 )
+from senpai.media import copy_character_media_fields, get_character_media_reference
 from senpai.security import is_owner
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, get_rarity_from_string
 
@@ -102,13 +103,12 @@ async def get_character_owner_count(char_id: int) -> int:
 async def add_character_to_user(user_id: int, character: dict) -> bool:
     """Add a character to user's collection."""
     try:
-        char_data = normalize_character_document({
+        char_data = normalize_character_document(copy_character_media_fields(character, {
             'id': character['id'],
             'name': character['name'],
             'anime': character['anime'],
             'rarity': character.get('rarity', 1),
-            'img_url': character.get('img_url', '')
-        })
+        }))
 
         await user_collection.update_one(
             {'id': user_id},
@@ -203,6 +203,7 @@ async def initialize_shop_data(user_id: int) -> dict:
             'anime': char['anime'],
             'rarity': rarity,
             'img_url': char.get('img_url', ''),
+            'tg_file_id': char.get('tg_file_id', ''),
             'base_price': base_price,
             'discount_percent': discount_percent,
             'final_price': final_price
@@ -267,6 +268,7 @@ async def refresh_shop(user_id: int) -> Tuple[bool, str]:
             'anime': char['anime'],
             'rarity': rarity,
             'img_url': char.get('img_url', ''),
+            'tg_file_id': char.get('tg_file_id', ''),
             'base_price': base_price,
             'discount_percent': discount_percent,
             'final_price': final_price
@@ -396,12 +398,12 @@ async def display_shop_character(update: Update, context: CallbackContext,
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # Send or edit message with photo
-    photo_url = char.get('img_url')
+    photo_reference = get_character_media_reference(char)
 
     if update.message:
-        if photo_url:
+        if photo_reference:
             await update.message.reply_photo(
-                photo=photo_url,
+                photo=photo_reference,
                 caption=message,
                 parse_mode='HTML',
                 reply_markup=reply_markup
@@ -418,9 +420,9 @@ async def display_shop_character(update: Update, context: CallbackContext,
         # FIX: Check if message has photo or text properly
         try:
             # First try to edit media (photo with caption)
-            if photo_url:
+            if photo_reference:
                 await query.edit_message_media(
-                    media=InputMediaPhoto(media=photo_url, caption=message, parse_mode='HTML'),
+                    media=InputMediaPhoto(media=photo_reference, caption=message, parse_mode='HTML'),
                     reply_markup=reply_markup
                 )
             else:
@@ -453,9 +455,9 @@ async def display_shop_character(update: Update, context: CallbackContext,
                 except Exception:
                     pass
                 
-                if photo_url:
+                if photo_reference:
                     await query.message.chat.send_photo(
-                        photo=photo_url,
+                        photo=photo_reference,
                         caption=message,
                         parse_mode='HTML',
                         reply_markup=reply_markup

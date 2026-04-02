@@ -12,10 +12,16 @@ from cachetools import TTLCache
 from pymongo import ASCENDING
 import logging
 
-from telegram import Update, InlineQueryResultPhoto
+from telegram import (
+    Update,
+    InlineQueryResultArticle,
+    InlineQueryResultPhoto,
+    InputTextMessageContent,
+)
 from telegram.ext import InlineQueryHandler, CallbackContext
 
 from senpai import user_collection, collection, application, db
+from senpai.media import get_character_image_url
 from senpai.utils import to_small_caps, RARITY_MAP
 
 CACHE_TTL_CHARS = 120
@@ -174,13 +180,13 @@ async def inlinequery(update: Update, context: CallbackContext) -> None:
                 regex = get_regex(search_terms)
                 all_characters = await collection.find(
                     {"$or": [{"name": regex}, {"anime": regex}]},
-                    {'id': 1, 'name': 1, 'anime': 1, 'img_url': 1, 'rarity': 1}
+                    {'id': 1, 'name': 1, 'anime': 1, 'img_url': 1, 'tg_file_id': 1, 'rarity': 1}
                 ).to_list(length=None)
             else:
                 async def fetch_all():
                     return await collection.find(
                         {},
-                        {'id': 1, 'name': 1, 'anime': 1, 'img_url': 1, 'rarity': 1}
+                        {'id': 1, 'name': 1, 'anime': 1, 'img_url': 1, 'tg_file_id': 1, 'rarity': 1}
                     ).to_list(length=None)
                 
                 all_characters = await char_cache.get('all_chars', fetch_all)
@@ -229,15 +235,31 @@ async def inlinequery(update: Update, context: CallbackContext) -> None:
                     f"{to_small_caps('globally guessed')} {g_count} {to_small_caps('times...')}"
                 )
             
-            results.append(
-                InlineQueryResultPhoto(
-                    id=f"{char['id']}_{time.time()}_{offset}",
-                    photo_url=char['img_url'],
-                    thumbnail_url=char['img_url'],
-                    caption=caption,
-                    parse_mode='HTML'
+            image_url = get_character_image_url(char)
+            result_id = f"{char['id']}_{time.time()}_{offset}"
+
+            if image_url:
+                results.append(
+                    InlineQueryResultPhoto(
+                        id=result_id,
+                        photo_url=image_url,
+                        thumbnail_url=image_url,
+                        caption=caption,
+                        parse_mode='HTML'
+                    )
                 )
-            )
+            else:
+                results.append(
+                    InlineQueryResultArticle(
+                        id=result_id,
+                        title=f"{char['name']} ({char['id']})",
+                        description=char.get('anime', ''),
+                        input_message_content=InputTextMessageContent(
+                            message_text=caption,
+                            parse_mode='HTML'
+                        )
+                    )
+                )
         
         elapsed = time.time() - start_time
         logging.debug(f"Inline query processed in {elapsed:.2f}s | Results: {len(results)}")

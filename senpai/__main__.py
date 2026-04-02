@@ -35,6 +35,7 @@ from senpai.character_ids import (
     normalize_character_id,
     character_matches_id,
 )
+from senpai.media import get_character_media_reference
 from senpai import application, SUPPORT_CHAT, UPDATE_CHAT, db, LOGGER
 from senpai.security import is_owner
 from senpai.utils import RARITY_MAP, RARITY_TEXT_TO_NUMBER
@@ -308,7 +309,7 @@ async def send_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     try:
         await context.bot.send_photo(
             chat_id=chat_id,
-            photo=character.get('img_url'),
+            photo=get_character_media_reference(character),
             caption=caption,
         )
     except Exception:
