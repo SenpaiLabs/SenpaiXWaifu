@@ -100,7 +100,6 @@ def cached(ttl_seconds: int = CACHE_TTL):
 class HaremManagerV3:
     
     @staticmethod
-    @cached(ttl_seconds=60)
     async def get_user_characters_fast(user_id: int, rarity_filter: Optional[int] = None):
         pipeline = [
             {"$match": {"id": user_id}},
