@@ -442,9 +442,17 @@ async def display_shop_character(update: Update, context: CallbackContext,
                         reply_markup=reply_markup
                     )
         except Exception as e:
+            error_str = str(e).lower()
+            if "not modified" in error_str or "flood control" in error_str or "retry in" in error_str:
+                return
+            
             # Fallback: delete and resend
             try:
-                await query.delete_message()
+                try:
+                    await query.delete_message()
+                except Exception:
+                    pass
+                
                 if photo_url:
                     await query.message.chat.send_photo(
                         photo=photo_url,
@@ -664,9 +672,16 @@ async def show_purchase_confirmation(update: Update, context: CallbackContext,
                 reply_markup=reply_markup
             )
     except Exception as e:
+        error_str = str(e).lower()
+        if "not modified" in error_str or "flood control" in error_str or "retry in" in error_str:
+            return
+            
         # Fallback: delete and resend
         try:
-            await query.delete_message()
+            try:
+                await query.delete_message()
+            except Exception:
+                pass
             await query.message.chat.send_message(
                 text=message,
                 parse_mode='HTML',
@@ -758,16 +773,23 @@ async def process_purchase(update: Update, context: CallbackContext,
                     reply_markup=reply_markup
                 )
         except Exception as e:
-            # Fallback: delete and send new message
-            try:
-                await query.message.delete()
-                await query.message.chat.send_message(
-                    text=success_msg,
-                    parse_mode='HTML',
-                    reply_markup=reply_markup
-                )
-            except Exception as e2:
-                print(f"Error in process_purchase: {e2}")
+            error_str = str(e).lower()
+            if "not modified" in error_str or "flood control" in error_str or "retry in" in error_str:
+                pass  # We still want to answer the callback below
+            else:
+                # Fallback: delete and send new message
+                try:
+                    try:
+                        await query.message.delete()
+                    except Exception:
+                        pass
+                    await query.message.chat.send_message(
+                        text=success_msg,
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
+                    )
+                except Exception as e2:
+                    print(f"Error in process_purchase: {e2}")
 
         await query.answer(to_small_caps("✅ Purchase successful!"), show_alert=True)
     else:
