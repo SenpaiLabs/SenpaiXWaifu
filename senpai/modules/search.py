@@ -13,6 +13,7 @@ import asyncio
 from functools import wraps
 
 from senpai import senpaii, collection, user_collection
+from senpai.character_ids import character_id_query, character_id_variants, normalize_character_id
 from senpai.media import get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_MAP
 
@@ -48,14 +49,16 @@ async def get_character_by_id(character_id: str) -> Optional[Dict]:
     Returns:
         Character document or None if not found
     """
-    key = cache_key('char', character_id)
+    normalized_id = normalize_character_id(character_id)
+    cache_value = normalized_id if normalized_id is not None else character_id
+    key = cache_key('char', cache_value)
     
     # Check cache first
     if key in character_cache:
         return character_cache[key]
     
     try:
-        character = await collection.find_one({'id': character_id})
+        character = await collection.find_one(character_id_query(character_id))
         if character:
             character_cache[key] = character
         return character
@@ -77,7 +80,9 @@ async def get_character_count_optimized(character_id: str) -> int:
     Returns:
         Total count of this character across all users
     """
-    key = cache_key('count', character_id)
+    normalized_id = normalize_character_id(character_id)
+    cache_value = normalized_id if normalized_id is not None else character_id
+    key = cache_key('count', cache_value)
     
     # Check cache first
     if key in count_cache:
@@ -87,11 +92,11 @@ async def get_character_count_optimized(character_id: str) -> int:
         # Use aggregation pipeline for efficient counting
         pipeline = [
             # Match only users who have this character
-            {'$match': {'characters.id': character_id}},
+            {'$match': character_id_query(character_id, 'characters.id')},
             # Unwind the characters array
             {'$unwind': '$characters'},
             # Match only the specific character ID
-            {'$match': {'characters.id': character_id}},
+            {'$match': character_id_query(character_id, 'characters.id')},
             # Count the results
             {'$count': 'total'}
         ]
@@ -121,17 +126,25 @@ async def get_top_grabbers_optimized(character_id: str, limit: int = 10) -> List
     Returns:
         List of dicts with user_id, username, first_name, count
     """
-    key = cache_key('grabbers', character_id, limit)
+    normalized_id = normalize_character_id(character_id)
+    cache_value = normalized_id if normalized_id is not None else character_id
+    key = cache_key('grabbers', cache_value, limit)
     
     # Check cache first
     if key in grabber_cache:
         return grabber_cache[key]
     
     try:
+        id_variants = character_id_variants(character_id)
+        filter_condition = (
+            {'$eq': ['$$char.id', id_variants[0]]}
+            if len(id_variants) == 1
+            else {'$in': ['$$char.id', id_variants]}
+        )
         # Use aggregation pipeline for efficient top grabbers query
         pipeline = [
             # Match only users who have this character
-            {'$match': {'characters.id': character_id}},
+            {'$match': character_id_query(character_id, 'characters.id')},
             # Project the necessary fields and count matching characters
             {
                 '$project': {
@@ -143,7 +156,7 @@ async def get_top_grabbers_optimized(character_id: str, limit: int = 10) -> List
                             '$filter': {
                                 'input': '$characters',
                                 'as': 'char',
-                                'cond': {'$eq': ['$$char.id', character_id]}
+                                'cond': filter_condition
                             }
                         }
                     }
@@ -472,6 +485,14 @@ async def scheck_command(client, message):
             return
 
         character_id = message.command[1]
+        parsed_character_id = normalize_character_id(character_id)
+
+        if parsed_character_id is None:
+            await message.reply_text(
+                f"❌ **{to_small_caps('invalid character id')}!**\n\n"
+                f"{to_small_caps('please use a numeric id like')} `338`."
+            )
+            return
 
         # Search for character in database (with caching)
         character = await get_character_by_id(character_id)
@@ -479,7 +500,7 @@ async def scheck_command(client, message):
         if not character:
             await message.reply_text(
                 f"❌ **{to_small_caps('character not found')}!**\n\n"
-                f"{to_small_caps('character with id')} `{character_id}` {to_small_caps('is not available in main database')}."
+                f"{to_small_caps('character with id')} `{parsed_character_id}` {to_small_caps('is not available in main database')}."
             )
             return
 

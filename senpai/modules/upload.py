@@ -151,7 +151,7 @@ class ImageUploader:
                                 or result.get('data', {}).get('url')
                             )
                             if image_url:
-                                logger.info("ImgBB upload successful")
+                                logger.debug("ImgBB upload successful")
                                 return image_url
                     elif response.status == 429:
                         logger.warning("ImgBB rate limited, will retry...")
@@ -184,7 +184,7 @@ class ImageUploader:
                         if response.status == 200:
                             result = await response.json()
                             if isinstance(result, list) and len(result) > 0 and result[0].get('src'):
-                                logger.info("Telegraph upload successful via %s", endpoint)
+                                logger.debug("Telegraph upload successful via %s", endpoint)
                                 return f"https://telegra.ph{result[0]['src']}"
 
                         body = (await response.text()).strip()
@@ -221,7 +221,7 @@ class ImageUploader:
                     ) as response:
                         body = (await response.text()).strip()
                         if body.startswith('http'):
-                            logger.info("Catbox upload successful via %s mode", label)
+                            logger.debug("Catbox upload successful via %s mode", label)
                             return body
 
                         if userhash and body == "Not signed in!":
@@ -244,7 +244,7 @@ class ImageUploader:
             try:
                 url = await service(image_data)
                 if url:
-                    logger.info("Image upload succeeded via %s", service_name)
+                    logger.debug("Image upload succeeded via %s", service_name)
                     return url, service_name
             except Exception as e:
                 logger.error("Service %s failed: %s", service_name, e)
@@ -400,7 +400,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
 
         if getattr(message, "photo", None):
             character['tg_file_id'] = message.photo[-1].file_id
-            logger.info(
+            logger.debug(
                 "Stored character %s using host=%s, tg_file_id cached=%s",
                 display_char_id,
                 character.get('image_host'),
@@ -658,7 +658,7 @@ application.add_handler(CommandHandler('delete', delete, block=False))
 application.add_handler(CommandHandler('update', update, block=False))
 application.add_handler(CommandHandler('stats', stats, block=False))
 
-logger.info("Staff upload module loaded successfully")
+logger.debug("Staff upload module loaded successfully")
 
 # (c) @SenpaiLabs
 # SenpaiLabs Developer 
