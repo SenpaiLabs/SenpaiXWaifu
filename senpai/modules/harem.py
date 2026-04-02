@@ -24,7 +24,7 @@ from senpai import collection, user_collection, application
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, RARITY_MAP, get_rarity_from_string
 
 CACHE_TTL = 300
-PAGE_SIZE = 15
+PAGE_SIZE = 12
 
 redis_client = None
 if REDIS_AVAILABLE:
@@ -268,7 +268,6 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
         total_in_anime = anime_counts.get(anime, len(chars))
         
         harem_msg += f"<b>𖤍 {to_small_caps(safe_anime)} {{{len(chars)}/{total_in_anime}}}</b>\n"
-        harem_msg += f"{to_small_caps('--------------------')}\n"
         
         for char in chars:
             name = to_small_caps(escape(char.get('name', 'Unknown')))
@@ -280,9 +279,9 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
             emoji = RARITY_EMOJIS.get(rarity, '⚪')
             count = char.get('count', 1)
             
-            harem_msg += f"✶ {char['id']} [{emoji}] {name} x{count}\n"
+            harem_msg += f" ➥ <code>{char['id']}</code> [{emoji}] {name} x{count}\n"
         
-        harem_msg += f"{to_small_caps('--------------------')}\n\n"
+        harem_msg += "\n"
     
     keyboard = []
     keyboard.append([
@@ -317,15 +316,35 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     
     if not photo_url and display_chars:
         photo_url = display_chars[0].get('img_url')
+        
+    if len(harem_msg) > 1024:
+        photo_url = None
     
     try:
         if photo_url:
             if update.message:
                 await update.message.reply_photo(photo_url, caption=harem_msg, reply_markup=markup, parse_mode='HTML')
             else:
-                await update.callback_query.edit_message_caption(caption=harem_msg, reply_markup=markup, parse_mode='HTML')
+                try:
+                    await update.callback_query.edit_message_caption(caption=harem_msg, reply_markup=markup, parse_mode='HTML')
+                except Exception as e:
+                    if "There is no caption in the message to edit" in str(e):
+                        await update.callback_query.message.delete()
+                        await update.callback_query.message.reply_photo(photo_url, caption=harem_msg, reply_markup=markup, parse_mode='HTML')
+                    else:
+                        raise e
         else:
-            await _send_message(update, harem_msg, markup)
+            if update.message:
+                await update.message.reply_text(harem_msg, reply_markup=markup, parse_mode='HTML')
+            else:
+                try:
+                    await update.callback_query.edit_message_text(text=harem_msg, reply_markup=markup, parse_mode='HTML')
+                except Exception as e:
+                    if "There is no text in the message to edit" in str(e):
+                        await update.callback_query.message.delete()
+                        await update.callback_query.message.reply_text(harem_msg, reply_markup=markup, parse_mode='HTML')
+                    else:
+                        raise e
     except Exception as e:
         if "message is not modified" in str(e).lower():
             pass

@@ -59,12 +59,7 @@ class RarityLevel(Enum):
                 return rarity
         return None
 
-WRONG_FORMAT_TEXT = f"""❌ <b>{to_small_caps('Wrong format!')}</b>
-
-<b>{to_small_caps('Usage')}:</b> Reply to an image with:
-<code>/upload character-name anime-name rarity-number</code>
-
-<b>{to_small_caps('Example')}:</b>
+WRONG_FORMAT_TEXT = f"""<b>{to_small_caps('Example')}:</b>
 <code>/upload naruto-uzumaki naruto 3</code>
 
 <b>{to_small_caps('Available Rarities')}:</b>
@@ -290,18 +285,24 @@ async def upload(update: Update, context: CallbackContext) -> None:
             'added_by': update.effective_user.id,
             'added_by_name': update.effective_user.first_name
         }
+        
+        rarity_parts = rarity.split(' ', 1)
+        rarity_emoji = rarity_parts[0] if len(rarity_parts) > 1 else "⚪"
+        rarity_text = rarity_parts[1].title() if len(rarity_parts) > 1 else rarity
+
+        channel_caption = (
+            f'<code>{display_char_id}</code>: {character_name}\n'
+            f'{anime_name}\n'
+            f'{rarity_emoji} 𝙍𝘼𝙍𝙄𝙏𝙔: {rarity_text}\n'
+            f'Type: 🖼 Image\n\n'
+            f'𝑴𝒂𝒅𝒆 𝑩𝒚 ➥ <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
+        )
 
         try:
             message = await context.bot.send_photo(
                 chat_id=CHARA_CHANNEL_ID,
                 photo=img_url,
-                caption=(
-                    f'<b>🎴 {to_small_caps("Character")}:</b> {character_name}\n'
-                    f'<b>📺 {to_small_caps("Anime")}:</b> {anime_name}\n'
-                    f'<b>⭐ {to_small_caps("Rarity")}:</b> {rarity}\n'
-                    f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
-                    f'<b>👤 {to_small_caps("Added by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
-                ),
+                caption=channel_caption,
                 parse_mode='HTML',
                 read_timeout=60,
                 write_timeout=60,
@@ -317,13 +318,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
             message = await context.bot.send_photo(
                 chat_id=CHARA_CHANNEL_ID,
                 photo=io.BytesIO(image_bytes),
-                caption=(
-                    f'<b>🎴 {to_small_caps("Character")}:</b> {character_name}\n'
-                    f'<b>📺 {to_small_caps("Anime")}:</b> {anime_name}\n'
-                    f'<b>⭐ {to_small_caps("Rarity")}:</b> {rarity}\n'
-                    f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
-                    f'<b>👤 {to_small_caps("Added by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
-                ),
+                caption=channel_caption,
                 parse_mode='HTML'
             )
             character['message_id'] = message.message_id
