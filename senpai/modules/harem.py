@@ -338,7 +338,11 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                     )
                 except Exception as e:
                     error_text = str(e).lower()
-                    if "there is no caption in the message to edit" in error_text or "there is no media in the message to edit" in error_text:
+                    if (
+                        "there is no caption in the message to edit" in error_text
+                        or "there is no media in the message to edit" in error_text
+                        or "message to edit not found" in error_text
+                    ):
                         try:
                             await update.callback_query.message.delete()
                         except Exception:
@@ -359,7 +363,7 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                     await update.callback_query.edit_message_text(text=harem_msg, reply_markup=markup, parse_mode='HTML')
                 except Exception as e:
                     error_text = str(e).lower()
-                    if "there is no text in the message to edit" in error_text:
+                    if "there is no text in the message to edit" in error_text or "message to edit not found" in error_text:
                         try:
                             await update.callback_query.message.delete()
                         except Exception:
@@ -372,8 +376,14 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                     else:
                         raise e
     except Exception as e:
-        if "message is not modified" in str(e).lower():
+        error_text = str(e).lower()
+        if "message is not modified" in error_text:
             pass
+        elif "message to edit not found" in error_text or "query is too old" in error_text:
+            try:
+                await update.callback_query.answer(to_small_caps("This harem message expired. Open /harem again."), show_alert=False)
+            except Exception:
+                pass
         else:
             raise
 

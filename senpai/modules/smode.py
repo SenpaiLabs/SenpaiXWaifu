@@ -187,6 +187,14 @@ async def smode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         rarity_filter = rarity_info["value"]
         selected_text = rarity_info["name"]
 
+    current_pref = await get_user_sort_preference(user_id)
+    if current_pref == rarity_filter:
+        await query.answer(
+            to_small_caps("This sorting mode is already active."),
+            show_alert=False
+        )
+        return
+
     # Save preference
     await set_user_sort_preference(user_id, rarity_filter)
 
@@ -218,7 +226,10 @@ async def smode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode="HTML"
         )
     except Exception as e:
-        LOGGER.error(f"Failed to update smode message: {e}")
+        if "message is not modified" in str(e).lower():
+            LOGGER.debug("Smode message already reflected the selected state.")
+        else:
+            LOGGER.error(f"Failed to update smode message: {e}")
 
     # Show alert notification with success message
     alert_message = f"{to_small_caps('Your harem will now show only')} {selected_text} {to_small_caps('characters')}"
