@@ -1,11 +1,13 @@
 # (c) @SenpaiLabs
-# SenpaiLabs Developer 
+# SenpaiLabs Developer
 
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes
 
 from senpai import application, user_collection, LOGGER
-from senpai.character_ids import character_matches_id
+from senpai.character_ids import character_matches_id, normalize_character_id
+from senpai.utils import to_small_caps
+
 
 async def fav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_user:
@@ -14,13 +16,13 @@ async def fav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     args = context.args or []
     if not args:
-        await update.message.reply_text("ᴘʟᴇᴀꜱᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ: /fav <ɪᴅ>")
+        await update.message.reply_text(to_small_caps("Please provide a character ID: /fav <id>"))
         return
 
     try:
         character_id = int(args[0])
     except ValueError:
-        await update.message.reply_text("ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ ᴍᴜꜱᴛ ʙᴇ ᴀ ɴᴜᴍʙᴇʀ.")
+        await update.message.reply_text(to_small_caps("Character ID must be a number."))
         return
 
     try:
@@ -30,22 +32,26 @@ async def fav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = None
 
     if not user or not user.get('characters'):
-        await update.message.reply_text("ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴄᴏʟʟᴇᴄᴛᴇᴅ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ʏᴇᴛ.")
+        await update.message.reply_text(to_small_caps("You have not collected any characters yet."))
         return
 
     character = next((c for c in user['characters'] if character_matches_id(c, character_id)), None)
     if not character:
-        await update.message.reply_text("ᴛʜᴀᴛ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪꜱ ɴᴏᴛ ɪɴ ʏᴏᴜʀ ᴄᴏʟʟᴇᴄᴛɪᴏɴ.")
+        await update.message.reply_text(to_small_caps("That character is not in your collection."))
         return
 
     try:
-        await user_collection.update_one({'id': user_id}, {'$addToSet': {'favorites': character_id}})
+        await user_collection.update_one(
+            {'id': user_id},
+            {'$set': {'favorites': [character_id]}}
+        )
         await update.message.reply_text(
-            f"ᴄʜᴀʀᴀᴄᴛᴇʀ {character.get('name')} ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ꜰᴀᴠᴏʀɪᴛᴇꜱ."
+            to_small_caps(f"Character {character.get('name')} has been added to your favorites.")
         )
     except Exception:
         LOGGER.exception("Failed to set favorite character")
-        await update.message.reply_text("ꜰᴀɪʟᴇᴅ ᴛᴏ ᴍᴀʀᴋ ꜰᴀᴠᴏʀɪᴛᴇ. ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
+        await update.message.reply_text(to_small_caps("Failed to mark favorite. Please try again later."))
+
 
 async def unfav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.effective_user:
@@ -54,13 +60,13 @@ async def unfav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     args = context.args or []
     if not args:
-        await update.message.reply_text("ᴘʟᴇᴀꜱᴇ ᴘʀᴏᴠɪᴅᴇ ᴀ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ: /unfav <ɪᴅ>")
+        await update.message.reply_text(to_small_caps("Please provide a character ID: /unfav <id>"))
         return
 
     try:
         character_id = int(args[0])
     except ValueError:
-        await update.message.reply_text("ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ ᴍᴜꜱᴛ ʙᴇ ᴀ ɴᴜᴍʙᴇʀ.")
+        await update.message.reply_text(to_small_caps("Character ID must be a number."))
         return
 
     try:
@@ -70,22 +76,31 @@ async def unfav(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = None
 
     if not user or not user.get('characters'):
-        await update.message.reply_text("ʏᴏᴜ ʜᴀᴠᴇ ɴᴏᴛ ᴄᴏʟʟᴇᴄᴛᴇᴅ ᴀɴʏ ᴄʜᴀʀᴀᴄᴛᴇʀꜱ ʏᴇᴛ.")
+        await update.message.reply_text(to_small_caps("You have not collected any characters yet."))
         return
 
     favorites = user.get('favorites', [])
-    if character_id not in favorites:
-        await update.message.reply_text("ᴛʜᴀᴛ ᴄʜᴀʀᴀᴄᴛᴇʀ ɪꜱ ɴᴏᴛ ɪɴ ʏᴏᴜʀ ꜰᴀᴠᴏʀɪᴛᴇꜱ.")
+    updated_favorites = [
+        favorite for favorite in favorites
+        if normalize_character_id(favorite) != character_id
+    ]
+
+    if len(updated_favorites) == len(favorites):
+        await update.message.reply_text(to_small_caps("That character is not in your favorites."))
         return
 
     try:
-        await user_collection.update_one({'id': user_id}, {'$pull': {'favorites': character_id}})
+        await user_collection.update_one(
+            {'id': user_id},
+            {'$set': {'favorites': updated_favorites}}
+        )
         await update.message.reply_text(
-            f"ᴄʜᴀʀᴀᴄᴛᴇʀ ɪᴅ {character_id} ʜᴀꜱ ʙᴇᴇɴ ʀᴇᴍᴏᴠᴇᴅ ꜰʀᴏᴍ ʏᴏᴜʀ ꜰᴀᴠᴏʀɪᴛᴇꜱ."
+            to_small_caps(f"Character ID {character_id} has been removed from your favorites.")
         )
     except Exception:
         LOGGER.exception("Failed to remove favorite character")
-        await update.message.reply_text("ꜰᴀɪʟᴇᴅ ᴛᴏ ʀᴇᴍᴏᴠᴇ ꜰᴀᴠᴏʀɪᴛᴇ. ᴘʟᴇᴀꜱᴇ ᴛʀʏ ᴀɢᴀɪɴ ʟᴀᴛᴇʀ.")
+        await update.message.reply_text(to_small_caps("Failed to remove favorite. Please try again later."))
+
 
 application.add_handler(CommandHandler("fav", fav, block=False))
 application.add_handler(CommandHandler("unfav", unfav, block=False))

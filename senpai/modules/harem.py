@@ -4,7 +4,7 @@
 # Telegram Channel @Senpai_Updates & @THE_DRAGON_SUPPORT
 # Developer @SenpaiLabs
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 from html import escape
 import math
@@ -313,8 +313,12 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     photo_url = None
     if user.get('favorites'):
         fav_id = user['favorites'][0]
-        if fav_id in char_details:
-            photo_url = get_character_media_reference(char_details[fav_id])
+        favorite_character = char_details.get(fav_id)
+        if not favorite_character:
+            favorite_details = await HaremManagerV3.get_character_details_batch([fav_id])
+            favorite_character = favorite_details.get(fav_id)
+        if favorite_character:
+            photo_url = get_character_media_reference(favorite_character)
     
     if not photo_url and display_chars:
         photo_url = get_character_media_reference(display_chars[0])
@@ -328,11 +332,23 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                 await update.message.reply_photo(photo_url, caption=harem_msg, reply_markup=markup, parse_mode='HTML')
             else:
                 try:
-                    await update.callback_query.edit_message_caption(caption=harem_msg, reply_markup=markup, parse_mode='HTML')
+                    await update.callback_query.edit_message_media(
+                        media=InputMediaPhoto(media=photo_url, caption=harem_msg, parse_mode='HTML'),
+                        reply_markup=markup,
+                    )
                 except Exception as e:
-                    if "There is no caption in the message to edit" in str(e):
-                        await update.callback_query.message.delete()
-                        await update.callback_query.message.reply_photo(photo_url, caption=harem_msg, reply_markup=markup, parse_mode='HTML')
+                    error_text = str(e).lower()
+                    if "there is no caption in the message to edit" in error_text or "there is no media in the message to edit" in error_text:
+                        try:
+                            await update.callback_query.message.delete()
+                        except Exception:
+                            pass
+                        await update.callback_query.message.chat.send_photo(
+                            photo=photo_url,
+                            caption=harem_msg,
+                            reply_markup=markup,
+                            parse_mode='HTML',
+                        )
                     else:
                         raise e
         else:
@@ -342,9 +358,17 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                 try:
                     await update.callback_query.edit_message_text(text=harem_msg, reply_markup=markup, parse_mode='HTML')
                 except Exception as e:
-                    if "There is no text in the message to edit" in str(e):
-                        await update.callback_query.message.delete()
-                        await update.callback_query.message.reply_text(harem_msg, reply_markup=markup, parse_mode='HTML')
+                    error_text = str(e).lower()
+                    if "there is no text in the message to edit" in error_text:
+                        try:
+                            await update.callback_query.message.delete()
+                        except Exception:
+                            pass
+                        await update.callback_query.message.chat.send_message(
+                            text=harem_msg,
+                            reply_markup=markup,
+                            parse_mode='HTML',
+                        )
                     else:
                         raise e
     except Exception as e:
