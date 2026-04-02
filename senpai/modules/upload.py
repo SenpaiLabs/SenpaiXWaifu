@@ -23,8 +23,8 @@ from senpai import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT
 from senpai.character_ids import character_id_query, format_character_id, normalize_character_id
 from senpai.config import Config
 from senpai.security import is_owner_or_sudo
+from senpai.utils import to_small_caps
 
-# ========== LOGGING SETUP ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -35,7 +35,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ========== RARITY ENUM ==========
 class RarityLevel(Enum):
     COMMON = (1, "⚪ ᴄᴏᴍᴍᴏɴ")
     RARE = (2, "🔵 ʀᴀʀᴇ")
@@ -60,16 +59,15 @@ class RarityLevel(Enum):
                 return rarity
         return None
 
-# ========== TEXT MESSAGES ==========
-WRONG_FORMAT_TEXT = """❌ Wrong format!
+WRONG_FORMAT_TEXT = f"""❌ <b>{to_small_caps('Wrong format!')}</b>
 
-<b>Usage:</b> Reply to an image with:
+<b>{to_small_caps('Usage')}:</b> Reply to an image with:
 <code>/upload character-name anime-name rarity-number</code>
 
-<b>Example:</b>
+<b>{to_small_caps('Example')}:</b>
 <code>/upload naruto-uzumaki naruto 3</code>
 
-<b>Available Rarities:</b>
+<b>{to_small_caps('Available Rarities')}:</b>
 1 - ⚪ ᴄᴏᴍᴍᴏɴ
 2 - 🔵 ʀᴀʀᴇ
 3 - 🟡 ʟᴇɢᴇɴᴅᴀʀʏ
@@ -86,7 +84,6 @@ WRONG_FORMAT_TEXT = """❌ Wrong format!
 14 - 🍭 ᴋᴀᴡᴀɪɪ
 15 - 🧬 ʜʏʙʀɪᴅ"""
 
-# ========== DECORATORS ==========
 def admin_only(func):
     """Check if user is owner or sudo user"""
     @wraps(func)
@@ -113,7 +110,6 @@ def log_command(func):
             raise
     return wrapper
 
-# ========== IMAGE UPLOADER CLASS ==========
 class ImageUploader:
     def __init__(self):
         self.imgbb_key = Config.IMGBB_API_KEY
@@ -196,7 +192,6 @@ class ImageUploader:
 
     async def upload_with_failover(self, image_data: bytes) -> str:
         """Try multiple services until one succeeds"""
-        # Shuffle for load balancing
         services = self.services.copy()
         random.shuffle(services)
         
@@ -211,7 +206,6 @@ class ImageUploader:
         
         return None
 
-# ========== DATABASE OPERATIONS ==========
 async def get_next_sequence_number(sequence_name):
     """Get the next numeric character ID."""
     sequence_collection = db.sequences
@@ -223,7 +217,6 @@ async def get_next_sequence_number(sequence_name):
     )
     return int(sequence_document['sequence_value'])
 
-# ========== COMMAND HANDLERS ==========
 @admin_only
 @log_command
 async def upload(update: Update, context: CallbackContext) -> None:
@@ -245,11 +238,9 @@ async def upload(update: Update, context: CallbackContext) -> None:
         await update.message.reply_text(WRONG_FORMAT_TEXT, parse_mode='HTML')
         return
 
-    # Progress message
-    progress_msg = await update.message.reply_text('⏳ <b>Starting upload process...</b>', parse_mode='HTML')
+    progress_msg = await update.message.reply_text(f'⏳ <b>{to_small_caps("Starting upload process...")}</b>', parse_mode='HTML')
 
     try:
-        # Parse arguments
         character_name = args[0].replace('-', ' ').strip().title()
         anime_name = args[1].replace('-', ' ').strip().title()
 
@@ -266,8 +257,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
 
         rarity = rarity_level.value[1]
 
-        # Step 1: Download image
-        await progress_msg.edit_text('📥 <b>Downloading image...</b>', parse_mode='HTML')
+        await progress_msg.edit_text(f'📥 <b>{to_small_caps("Downloading image")}...</b>', parse_mode='HTML')
         photo = update.message.reply_to_message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
         image_bytes = await file.download_as_bytearray()
@@ -276,8 +266,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
             await progress_msg.edit_text('❌ Image too large! Max size: 10MB')
             return
 
-        # Step 2: Upload to hosting
-        await progress_msg.edit_text('☁️ <b>Uploading to cloud storage...</b>\n<i>This may take a few seconds...</i>', parse_mode='HTML')
+        await progress_msg.edit_text(f'☁️ <b>{to_small_caps("Uploading to cloud storage")}...</b>\n<i>This may take a few seconds...</i>', parse_mode='HTML')
         
         uploader = ImageUploader()
         img_url = await uploader.upload_with_failover(bytes(image_bytes))
@@ -286,8 +275,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
             await progress_msg.edit_text('❌ Failed to upload image. All hosting services failed.\nPlease try again later.')
             return
 
-        # Step 3: Generate ID and prepare data
-        await progress_msg.edit_text('💾 <b>Saving to database...</b>', parse_mode='HTML')
+        await progress_msg.edit_text(f'💾 <b>{to_small_caps("Saving to database")}...</b>', parse_mode='HTML')
         
         char_id = await get_next_sequence_number('character_id')
         display_char_id = format_character_id(char_id)
@@ -303,18 +291,16 @@ async def upload(update: Update, context: CallbackContext) -> None:
             'added_by_name': update.effective_user.first_name
         }
 
-        # Step 4: Post to channel
         try:
             message = await context.bot.send_photo(
                 chat_id=CHARA_CHANNEL_ID,
                 photo=img_url,
                 caption=(
-                    f'<b>🎴 Character:</b> {character_name}\n'
-                    f'<b>📺 Anime:</b> {anime_name}\n'
-                    f'<b>⭐ Rarity:</b> {rarity}\n'
-                    f'<b>🆔 ID:</b> <code>{display_char_id}</code>\n\n'
-                    f'<b>👤 Added by:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>\n'
-                    f'<b>📅 Date:</b> {datetime.utcnow().strftime("%Y-%m-%d %H:%M")}'
+                    f'<b>🎴 {to_small_caps("Character")}:</b> {character_name}\n'
+                    f'<b>📺 {to_small_caps("Anime")}:</b> {anime_name}\n'
+                    f'<b>⭐ {to_small_caps("Rarity")}:</b> {rarity}\n'
+                    f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
+                    f'<b>👤 {to_small_caps("Added by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
                 ),
                 parse_mode='HTML',
                 read_timeout=60,
@@ -326,38 +312,29 @@ async def upload(update: Update, context: CallbackContext) -> None:
             
         except Exception as e:
             logger.error(f"Channel post failed with URL: {e}")
-            # Fallback: send image directly
-            await progress_msg.edit_text('⚠️ <b>URL failed, sending image directly...</b>', parse_mode='HTML')
+            await progress_msg.edit_text(f'⚠️ <b>{to_small_caps("URL failed, sending image directly")}...</b>', parse_mode='HTML')
             
             message = await context.bot.send_photo(
                 chat_id=CHARA_CHANNEL_ID,
                 photo=io.BytesIO(image_bytes),
                 caption=(
-                    f'<b>🎴 Character:</b> {character_name}\n'
-                    f'<b>📺 Anime:</b> {anime_name}\n'
-                    f'<b>⭐ Rarity:</b> {rarity}\n'
-                    f'<b>🆔 ID:</b> <code>{display_char_id}</code>\n\n'
-                    f'<b>👤 Added by:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
+                    f'<b>🎴 {to_small_caps("Character")}:</b> {character_name}\n'
+                    f'<b>📺 {to_small_caps("Anime")}:</b> {anime_name}\n'
+                    f'<b>⭐ {to_small_caps("Rarity")}:</b> {rarity}\n'
+                    f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
+                    f'<b>👤 {to_small_caps("Added by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>'
                 ),
                 parse_mode='HTML'
             )
             character['message_id'] = message.message_id
 
-        # Step 5: Save to database
         await collection.insert_one(character)
         
-        # Success message
         channel_username = str(CHARA_CHANNEL_ID)[4:] if str(CHARA_CHANNEL_ID).startswith('-100') else CHARA_CHANNEL_ID
         
         await progress_msg.delete()
         await update.message.reply_text(
-            f'✅ <b>Character Added Successfully!</b>\n\n'
-            f'🆔 ID: <code>{display_char_id}</code>\n'
-            f'👤 Name: {character_name}\n'
-            f'📺 Anime: {anime_name}\n'
-            f'⭐ Rarity: {rarity}\n'
-            f'🔗 <a href="{img_url}">Image Link</a>\n\n'
-            f'<b>View in channel:</b> <a href="https://t.me/c/{channel_username}/{message.message_id}">Click here</a>',
+            f'✅ <b>{to_small_caps("Character Added Successfully!")}</b>',
             parse_mode='HTML',
             disable_web_page_preview=True
         )
@@ -393,7 +370,6 @@ async def delete(update: Update, context: CallbackContext) -> None:
         return
     
     try:
-        # Find character first
         character = await collection.find_one(character_id_query(char_id))
         
         if not character:
@@ -404,7 +380,6 @@ async def delete(update: Update, context: CallbackContext) -> None:
             return
         display_char_id = format_character_id(character.get('id', char_id))
         
-        # Delete from channel if message exists
         if character.get('message_id'):
             try:
                 await context.bot.delete_message(
@@ -414,16 +389,12 @@ async def delete(update: Update, context: CallbackContext) -> None:
                 logger.debug(f"Deleted message {character['message_id']} from channel")
             except Exception as e:
                 logger.warning(f"Could not delete message from channel: {e}")
-                # Continue anyway
         
-        # Delete from database
         await collection.delete_one(character_id_query(char_id))
         
         await update.message.reply_text(
-            f'✅ <b>Character Deleted!</b>\n\n'
-            f'🆔 ID: <code>{display_char_id}</code>\n'
-            f'👤 Was: {character.get("name", "Unknown")}\n'
-            f'📺 Anime: {character.get("anime", "Unknown")}',
+            f'✅ <b>{to_small_caps("Character Deleted Successfully!")}</b>\n\n'
+            f'🆔 <b>{to_small_caps("ID")}:</b> <code>{display_char_id}</code>',
             parse_mode='HTML'
         )
         logger.debug(f"Character {char_id} deleted by {update.effective_user.id}")
@@ -466,7 +437,6 @@ async def update(update: Update, context: CallbackContext) -> None:
         return
 
     try:
-        # Find character
         character = await collection.find_one(character_id_query(char_id))
         if not character:
             await update.message.reply_text(
@@ -476,7 +446,6 @@ async def update(update: Update, context: CallbackContext) -> None:
             return
         display_char_id = format_character_id(character.get('id', char_id))
 
-        # Process new value
         if field in ['name', 'anime']:
             processed_value = new_value.replace('-', ' ').strip().title()
         elif field == 'rarity':
@@ -492,7 +461,6 @@ async def update(update: Update, context: CallbackContext) -> None:
         else:
             processed_value = new_value
 
-        # Update database
         await collection.update_one(
             character_id_query(char_id),
             {
@@ -504,9 +472,7 @@ async def update(update: Update, context: CallbackContext) -> None:
             }
         )
 
-        # Handle channel updates
         if field == 'img_url':
-            # Delete old message and send new
             try:
                 if character.get('message_id'):
                     await context.bot.delete_message(
@@ -520,36 +486,34 @@ async def update(update: Update, context: CallbackContext) -> None:
                 chat_id=CHARA_CHANNEL_ID,
                 photo=processed_value,
                 caption=(
-                    f'<b>🎴 Character:</b> {character["name"]}\n'
-                    f'<b>📺 Anime:</b> {character["anime"]}\n'
-                    f'<b>⭐ Rarity:</b> {character["rarity"]}\n'
-                    f'<b>🆔 ID:</b> <code>{display_char_id}</code>\n\n'
-                    f'<b>✏️ Updated by:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>\n'
-                    f'<b>🔄 Field:</b> Image URL'
+                    f'<b>🎴 {to_small_caps("Character")}:</b> {character["name"]}\n'
+                    f'<b>📺 {to_small_caps("Anime")}:</b> {character["anime"]}\n'
+                    f'<b>⭐ {to_small_caps("Rarity")}:</b> {character["rarity"]}\n'
+                    f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
+                    f'<b>✏️ {to_small_caps("Updated by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>\n'
+                    f'<b>🔄 {to_small_caps("Field")}:</b> Image URL'
                 ),
                 parse_mode='HTML'
             )
             
-            # Update message_id in DB
             await collection.update_one(
                 character_id_query(char_id),
                 {'$set': {'message_id': new_msg.message_id}}
             )
             
         else:
-            # Edit caption only
             try:
                 if character.get('message_id'):
                     await context.bot.edit_message_caption(
                         chat_id=CHARA_CHANNEL_ID,
                         message_id=character['message_id'],
                         caption=(
-                            f'<b>🎴 Character:</b> {character["name"] if field != "name" else processed_value}\n'
-                            f'<b>📺 Anime:</b> {character["anime"] if field != "anime" else processed_value}\n'
-                            f'<b>⭐ Rarity:</b> {character["rarity"] if field != "rarity" else processed_value}\n'
-                            f'<b>🆔 ID:</b> <code>{display_char_id}</code>\n\n'
-                            f'<b>✏️ Updated by:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>\n'
-                            f'<b>🔄 Field:</b> {field}'
+                            f'<b>🎴 {to_small_caps("Character")}:</b> {character["name"] if field != "name" else processed_value}\n'
+                            f'<b>📺 {to_small_caps("Anime")}:</b> {character["anime"] if field != "anime" else processed_value}\n'
+                            f'<b>⭐ {to_small_caps("Rarity")}:</b> {character["rarity"] if field != "rarity" else processed_value}\n'
+                            f'<b>🆔 {to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n\n'
+                            f'<b>✏️ {to_small_caps("Updated by")}:</b> <a href="tg://user?id={update.effective_user.id}">{update.effective_user.first_name}</a>\n'
+                            f'<b>🔄 {to_small_caps("Field")}:</b> {field}'
                         ),
                         parse_mode='HTML'
                     )
@@ -557,10 +521,10 @@ async def update(update: Update, context: CallbackContext) -> None:
                 logger.warning(f"Could not edit caption: {e}")
 
         await update.message.reply_text(
-            f'✅ <b>Updated Successfully!</b>\n\n'
-            f'🆔 ID: <code>{display_char_id}</code>\n'
-            f'🔄 Field: <code>{field}</code>\n'
-            f'✨ New Value: <code>{processed_value[:50]}</code>',
+            f'✅ <b>{to_small_caps("Updated Successfully!")}</b>\n\n'
+            f'🆔 <b>{to_small_caps("ID")}:</b> <code>{display_char_id}</code>\n'
+            f'🔄 <b>{to_small_caps("Field")}:</b> <code>{field}</code>\n'
+            f'✨ <b>{to_small_caps("New Value")}:</b> <code>{processed_value[:50]}</code>',
             parse_mode='HTML'
         )
         logger.debug(f"Character {char_id} updated by {update.effective_user.id}: {field} = {processed_value[:30]}")
@@ -573,28 +537,24 @@ async def update(update: Update, context: CallbackContext) -> None:
 async def stats(update: Update, context: CallbackContext) -> None:
     """Show database statistics"""
     try:
-        # Total count
         total = await collection.count_documents({})
         
-        # Rarity distribution
         pipeline = [
             {'$group': {'_id': '$rarity', 'count': {'$sum': 1}}},
             {'$sort': {'count': -1}}
         ]
         rarity_stats = await collection.aggregate(pipeline).to_list(length=None)
         
-        # Recent uploads (last 24 hours)
         from datetime import timedelta
         yesterday = datetime.utcnow() - timedelta(days=1)
         recent = await collection.count_documents({'created_at': {'$gte': yesterday}})
         
-        # Build message
-        text = f"📊 <b>Database Statistics</b>\n\n"
-        text += f"📦 <b>Total Characters:</b> <code>{total}</code>\n"
-        text += f"📈 <b>Last 24h:</b> <code>+{recent}</code>\n\n"
+        text = f"📊 <b>{to_small_caps('Database Statistics')}</b>\n\n"
+        text += f"📦 <b>{to_small_caps('Total Characters')}:</b> <code>{total}</code>\n"
+        text += f"📈 <b>{to_small_caps('Last 24h')}:</b> <code>+{recent}</code>\n\n"
         
         if rarity_stats:
-            text += "<b>⭐ Rarity Distribution:</b>\n"
+            text += f"<b>⭐ {to_small_caps('Rarity Distribution')}:</b>\n"
             for stat in rarity_stats:
                 count = stat['count']
                 percentage = (count / total) * 100 if total > 0 else 0
@@ -609,7 +569,6 @@ async def stats(update: Update, context: CallbackContext) -> None:
         logger.error(f"Stats error: {e}")
         await update.message.reply_text(f'❌ Error fetching stats: {str(e)}')
 
-# ========== HANDLERS ==========
 application.add_handler(CommandHandler('upload', upload, block=False))
 application.add_handler(CommandHandler('delete', delete, block=False))
 application.add_handler(CommandHandler('update', update, block=False))

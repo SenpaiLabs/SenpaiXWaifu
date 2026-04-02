@@ -16,140 +16,34 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from pymongo import ReturnDocument
 
 from senpai import application, user_collection, LOGGER, OWNER_ID, SUDO_USERS
+from senpai.utils import to_small_caps
 
-# ---------- Premium Styling Helpers ----------
-
-# Small Caps Unicode Mapping (preserving HTML tags)
-SMALL_CAPS_MAP = {
-    'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ғ', 'g': 'ɢ',
-    'h': 'ʜ', 'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 'm': 'ᴍ', 'n': 'ɴ',
-    'o': 'ᴏ', 'p': 'ᴘ', 'q': 'ǫ', 'r': 'ʀ', 's': 'ꜱ', 't': 'ᴛ', 'u': 'ᴜ',
-    'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x', 'y': 'ʏ', 'z': 'ᴢ',
-    'A': 'ᴀ', 'B': 'ʙ', 'C': 'ᴄ', 'D': 'ᴅ', 'E': 'ᴇ', 'F': 'ғ', 'G': 'ɢ',
-    'H': 'ʜ', 'I': 'ɪ', 'J': 'ᴊ', 'K': 'ᴋ', 'L': 'ʟ', 'M': 'ᴍ', 'N': 'ɴ',
-    'O': 'ᴏ', 'P': 'ᴘ', 'Q': 'ǫ', 'R': 'ʀ', 'S': 'ꜱ', 'T': 'ᴛ', 'U': 'ᴜ',
-    'V': 'ᴠ', 'W': 'ᴡ', 'X': 'x', 'Y': 'ʏ', 'Z': 'ᴢ',
-    ' ': ' ', ':': ':', '!': '!', '?': '?', '.': '.', ',': ',', '-': '-',
-    '(': '(', ')': ')', '[': '[', ']': ']', '{': '{', '}': '}', '=': '=',
-    '+': '+', '*': '*', '/': '/', '\\': '\\', '|': '|', '_': '_', '"': '"',
-    "'": "'", '`': '`', '~': '~', '@': '@', '#': '#', '$': '$', '%': '%',
-    '^': '^', '&': '&', ';': ';', '<': '<', '>': '>', '0': '0', '1': '1',
-    '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8',
-    '9': '9'
-}
-
-def safe_small_caps(text: str) -> str:
-    """Convert text to small caps Unicode characters while preserving HTML tags."""
-    # First, protect HTML tags by replacing them with placeholders
-    html_pattern = r'(<[^>]+>)'
-    html_tags = re.findall(html_pattern, text)
-
-    # Replace HTML tags with placeholders
-    for i, tag in enumerate(html_tags):
-        text = text.replace(tag, f'__HTML_TAG_{i}__')
-
-    # Convert remaining text to small caps
-    result = ''.join(SMALL_CAPS_MAP.get(char, char) for char in text)
-
-    # Restore HTML tags
-    for i, tag in enumerate(html_tags):
-        result = result.replace(f'__HTML_TAG_{i}__', tag)
-
-    return result
-
-# Premium Emoji Mapping
-PREMIUM_EMOJIS = {
-    # Standard emojis to premium replacements
-    '💰': '💰',  # Money bag to diamond
-    '💵': '💠',  # Dollar banknote to gem
-    '💳': '⚜️',  # Credit card to fleur-de-lis
-    '💸': '🪽',  # Money with wings to winged emoji
-    '✅': '✓',  # Check mark to heavy check
-    '❌': '✘',  # Cross mark to heavy multiplication
-    '⚠️': '❗',   # Warning to exclamation
-    '⏳': '⏱️',   # Hourglass to stopwatch
-}
-
-def premium_format(text: str) -> str:
-    """Apply premium styling to text with emoji replacements and small caps for specific words."""
-    # First replace emojis
-    for key, value in PREMIUM_EMOJIS.items():
-        text = text.replace(key, value)
-
-    # Apply small caps to specific standalone words (not inside HTML)
-    words_to_convert = ['Balance', 'Payment', 'Confirm', 'Cancel', 'Coins', 
-                       'Transaction', 'Success', 'Failed', 'Error', 'Usage']
-
-    # Process text line by line
-    lines = text.split('\n')
-    processed_lines = []
-
-    for line in lines:
-        # Skip lines that are mostly HTML tags
-        if re.search(r'<[^>]+>.*<[^>]+>', line):
-            # This line has HTML tags, process carefully
-            parts = re.split(r'(<[^>]+>)', line)
-            processed_parts = []
-
-            for part in parts:
-                if part.startswith('<') and part.endswith('>'):
-                    # This is an HTML tag, keep as is
-                    processed_parts.append(part)
-                else:
-                    # This is text, apply transformations
-                    for word in words_to_convert:
-                        part = re.sub(r'\b' + re.escape(word) + r'\b', safe_small_caps(word), part)
-                    processed_parts.append(part)
-
-            processed_lines.append(''.join(processed_parts))
-        else:
-            # Simple line without complex HTML
-            for word in words_to_convert:
-                line = re.sub(r'\b' + re.escape(word) + r'\b', safe_small_caps(word), line)
-            processed_lines.append(line)
-
-    return '\n'.join(processed_lines)
-
-# In-memory pending payments and cooldowns
 pending_payments: Dict[str, Dict[str, Any]] = {}
 pay_cooldowns: Dict[int, float] = {}
 
-# Configuration
 PENDING_EXPIRY_SECONDS = 5 * 60
 PAY_COOLDOWN_SECONDS = 60
 
-# ---------- Enhanced Validation ----------
 async def validate_payment_target(target_id: int, context: ContextTypes.DEFAULT_TYPE) -> tuple[bool, Optional[str]]:
-    """Validate if target is a regular user (not bot, channel, or group)."""
     try:
         target_chat = await context.bot.get_chat(target_id)
-
-        # Check if it's a bot
         if hasattr(target_chat, 'type') and target_chat.type == 'private':
-            # It's a private chat, check if user is a bot
             try:
                 if hasattr(target_chat, 'is_bot') and target_chat.is_bot:
-                    return False, "🤖 Seriously? You're trying to pay a bot? They don't need coins!"
+                    return False, f"🤖 <b>{to_small_caps('Bot Target Detected!')}</b>\n\n⚠️ <i>Bots don't need coins! Pay a real user instead.</i>"
             except:
                 pass
         
-        # Check if it's a channel or group
         if target_chat.type in ['channel', 'group', 'supergroup']:
-            return False, "📢 You can't pay to channels or groups! Pay to actual users only."
+            return False, f"📢 <b>{to_small_caps('Invalid Target!')}</b>\n\n⚠️ <i>You can only send coins to actual users, not channels or groups.</i>"
 
         return True, None
     except Exception as e:
         LOGGER.error(f"Error validating payment target {target_id}: {e}")
-        return False, "✘ ɪɴᴠᴀʟɪᴅ ᴛᴀʀɢᴇᴛ ᴜꜱᴇʀ."
+        return False, f"❌ <b>{to_small_caps('Invalid Target User!')}</b>\n\n⚠️ <i>Please ensure you're paying a valid member of the group.</i>"
 
-# ---------- Helpers - FIXED TO USE user_collection ----------
 async def _ensure_balance_doc(user_id: int) -> Dict[str, Any]:
-    """
-    Ensure a balance field exists in user_collection for the user and return it.
-    FIXED: Now uses user_collection instead of separate user_balance_coll.
-    """
     try:
-        # Update user_collection to ensure balance field exists
         await user_collection.update_one(
             {"id": user_id},
             {
@@ -169,24 +63,14 @@ async def _ensure_balance_doc(user_id: int) -> Dict[str, Any]:
         return {"id": user_id, "balance": 0}
 
 async def get_balance(user_id: int) -> int:
-    """
-    Return integer balance for a user from user_collection.
-    FIXED: Now uses user_collection instead of user_balance_coll.
-    """
     doc = await _ensure_balance_doc(user_id)
     return int(doc.get("balance", 0))
 
 async def change_balance(user_id: int, amount: int) -> int:
-    """
-    Atomically change balance by `amount` in user_collection.
-    Returns the new balance after change.
-    FIXED: Now uses user_collection instead of user_balance_coll.
-    """
     if amount == 0:
         return await get_balance(user_id)
 
     try:
-        # Update balance in user_collection
         await user_collection.update_one(
             {"id": user_id}, 
             {"$inc": {"balance": int(amount)}}, 
@@ -201,15 +85,10 @@ async def change_balance(user_id: int, amount: int) -> int:
         raise
 
 async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> bool:
-    """
-    Atomically transfer coins from sender -> receiver in user_collection.
-    FIXED: Now uses user_collection instead of user_balance_coll.
-    """
     if amount <= 0:
         return False
 
     try:
-        # Decrement sender's balance (only if sufficient balance exists)
         sender_after = await user_collection.find_one_and_update(
             {"id": sender_id, "balance": {"$gte": amount}},
             {"$inc": {"balance": -amount}},
@@ -224,7 +103,6 @@ async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> boo
         return False
 
     try:
-        # Increment receiver's balance
         await user_collection.update_one(
             {"id": receiver_id}, 
             {"$inc": {"balance": amount}}, 
@@ -235,7 +113,6 @@ async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> boo
     except Exception:
         LOGGER.exception("Failed to increment receiver %s; attempting rollback to sender %s", receiver_id, sender_id)
         try:
-            # Rollback: restore sender's balance
             await user_collection.update_one(
                 {"id": sender_id}, 
                 {"$inc": {"balance": amount}}, 
@@ -246,9 +123,7 @@ async def _atomic_transfer(sender_id: int, receiver_id: int, amount: int) -> boo
             LOGGER.exception("❌ Rollback failed for sender %s after transfer failure", sender_id)
         return False
 
-# ---------- Command handlers ----------
 async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/balance [@username|id] or reply - Show balance from user_collection."""
     target = update.effective_user
     if context.args:
         arg = context.args[0]
@@ -269,28 +144,24 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     bal = await get_balance(user_id)
     name = escape(getattr(target, "first_name", str(user_id)))
 
-    # Fixed: Proper HTML structure with preserved tags
-    message = f"💰 <b>{name}</b>'s {safe_small_caps('Balance')}: <b>{bal:,}</b> ᴄᴏɪɴs"
+    message = f"🏦 <b>{to_small_caps('Bank of Senpai')}</b>\n\n👤 <b>User:</b> <b>{name}</b>\n💰 <b>{to_small_caps('Balance')}:</b> <b>{bal:,}</b> {to_small_caps('coins')}"
     await update.message.reply_text(message, parse_mode="HTML")
 
 async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/pay <user_id|@username|reply> <amount> - Initiate payment."""
     if not context.args and not update.message.reply_to_message:
-        usage_text = premium_format("Usage: /pay <amount>")
-        await update.message.reply_text(usage_text)
+        usage_text = f"ℹ️ <b>{to_small_caps('Usage')}</b>: <code>/pay &lt;amount&gt;</code>\n\n<i>Reply to a user's message to pay them.</i>"
+        await update.message.reply_text(usage_text, parse_mode="HTML")
         return
 
     sender = update.effective_user
 
-    # Check cooldown
     now = time.time()
     next_allowed = pay_cooldowns.get(sender.id, 0)
     if now < next_allowed:
         remaining = int(next_allowed - now)
-        await update.message.reply_text(premium_format(f"⏱️ ʏᴏᴜ ᴍᴜsᴛ ᴡᴀɪᴛ {remaining}s ʙᴇғᴏʀᴇ sᴛᴀʀᴛɪɴɢ ᴀɴᴏᴛʜᴇʀ ᴘᴀʏᴍᴇɴᴛ."))
+        await update.message.reply_text(f"⏳ <b>{to_small_caps('Cooldown Active!')}</b>\n\n⏱️ <i>Please wait <b>{remaining}s</b> before making another payment.</i>", parse_mode="HTML")
         return
 
-    # Resolve target and amount
     target_id: Optional[int] = None
     amount_str: Optional[str] = None
 
@@ -299,7 +170,8 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         amount_str = context.args[0]
     else:
         if len(context.args) < 2:
-            await update.message.reply_text(premium_format("Usage: /pay <reply> <amount>"))
+            usage_text = f"ℹ️ <b>{to_small_caps('Usage')}</b>: <code>/pay &lt;@username/id&gt; &lt;amount&gt;</code>\n\n<i>Or simply reply to their message with /pay &lt;amount&gt;.</i>"
+            await update.message.reply_text(usage_text, parse_mode="HTML")
             return
         raw_target = context.args[0]
         amount_str = context.args[1]
@@ -313,37 +185,33 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 target_id = None
 
     if not target_id:
-        await update.message.reply_text(premium_format("✘ ᴄᴏᴜʟᴅ ɴᴏᴛ ʀᴇsᴏʟᴠᴇ ᴛᴀʀɢᴇᴛ ᴜsᴇʀ. ᴜsᴇ ᴜsᴇʀ ɪᴅ, @ᴜsᴇʀɴᴀᴍᴇ ᴏʀ ʀᴇᴘʟʏ ᴛᴏ ᴛʜᴇɪʀ ᴍᴇssᴀɢᴇ."))
+        await update.message.reply_text(f"❌ <b>{to_small_caps('User Not Found!')}</b>\n\n⚠️ <i>Please mention a valid <code>@username</code>, User ID, or reply directly to their message.</i>", parse_mode="HTML")
         return
 
     if target_id == sender.id:
-        await update.message.reply_text(premium_format("✓ ʏᴏᴜ ᴄᴀɴɴᴏᴛ ᴘᴀʏ ʏᴏᴜʀsᴇʟғ."))
+        await update.message.reply_text(f"🛑 <b>{to_small_caps('Action Denied!')}</b>\n\n⚠️ <i>You cannot send coins to yourself!</i>", parse_mode="HTML")
         return
 
-    # Enhanced validation - check if target is bot/channel/group
     is_valid, error_msg = await validate_payment_target(target_id, context)
     if not is_valid:
-        await update.message.reply_text(error_msg)
+        await update.message.reply_text(error_msg, parse_mode="HTML")
         return
 
-    # Parse amount
     try:
         amount = int(amount_str)
     except Exception:
-        await update.message.reply_text(premium_format("✘ ɪɴᴠᴀʟɪᴅ ᴀᴍᴏᴜɴᴛ. ᴜsᴇ ᴀ ᴘᴏsɪᴛɪᴠᴇ ɪɴᴛᴇɢᴇʀ."))
+        await update.message.reply_text(f"❌ <b>{to_small_caps('Invalid Amount!')}</b>\n\n⚠️ <i>Please enter a valid positive number for the amount.</i>", parse_mode="HTML")
         return
 
     if amount <= 0:
-        await update.message.reply_text(premium_format("✘ ᴀᴍᴏᴜɴᴛ ᴍᴜsᴛ ʙᴇ ɢʀᴇᴀᴛᴇʀ ᴛʜᴀɴ ᴢᴇʀᴏ."))
+        await update.message.reply_text(f"❌ <b>{to_small_caps('Invalid Amount!')}</b>\n\n⚠️ <i>The amount must be greater than zero.</i>", parse_mode="HTML")
         return
 
-    # Check sender balance
     bal = await get_balance(sender.id)
     if bal < amount:
-        await update.message.reply_text(premium_format(f"✘ ʏᴏᴜ ᴅᴏɴ'ᴛ ʜᴀᴠᴇ ᴇɴᴏᴜɢʜ ᴄᴏɪɴs. ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ: {bal:,}"))
+        await update.message.reply_text(f"❌ <b>{to_small_caps('Insufficient Funds!')}</b>\n\n💸 <i>You don't have enough coins for this transaction.</i>\n💰 <b>Your Balance:</b> {bal:,} coins", parse_mode="HTML")
         return
 
-    # Create pending payment
     token = uuid.uuid4().hex
     created_at = time.time()
     pending_payments[token] = {
@@ -354,7 +222,6 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "chat_id": update.effective_chat.id,
     }
 
-    # Fetch names
     try:
         target_chat = await context.bot.get_chat(target_id)
         target_name = escape(getattr(target_chat, "first_name", str(target_id)))
@@ -363,17 +230,16 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     sender_name = escape(getattr(sender, "first_name", str(sender.id)))
 
-    # Create message with proper HTML
-    text = f"❗ <b>ᴘᴀʏᴍᴇɴᴛ ᴄᴏɴғɪʀᴍᴀᴛɪᴏɴ</b>\n\n" \
-           f"sᴇɴᴅᴇʀ: <a href='tg://user?id={sender.id}'>{sender_name}</a>\n" \
-           f"ʀᴇᴄɪᴘɪᴇɴᴛ: <a href='tg://user?id={target_id}'>{target_name}</a>\n" \
-           f"ᴀᴍᴏᴜɴᴛ: <b>{amount:,}</b> ᴄᴏɪɴs\n\n" \
-           f"ᴀʀᴇ ʏᴏᴜ sᴜʀᴇ ʏᴏᴜ ᴡᴀɴᴛ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ?"
+    text = f"💸 <b>{to_small_caps('Payment Confirmation')}</b>\n\n" \
+           f"👤 <b>{to_small_caps('Sender')}:</b> <a href='tg://user?id={sender.id}'>{sender_name}</a>\n" \
+           f"👤 <b>{to_small_caps('Recipient')}:</b> <a href='tg://user?id={target_id}'>{target_name}</a>\n" \
+           f"💰 <b>{to_small_caps('Amount')}:</b> <b>{amount:,}</b> {to_small_caps('coins')}\n\n" \
+           f"❓ <i>Are you sure you want to proceed with this transaction?</i>"
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✓ ᴄᴏɴғɪʀᴍ", callback_data=f"pay_confirm:{token}"),
-            InlineKeyboardButton("✘ ᴄᴀɴᴄᴇʟ", callback_data=f"pay_cancel:{token}")
+            InlineKeyboardButton(f"✅ {to_small_caps('Confirm')}", callback_data=f"pay_confirm:{token}"),
+            InlineKeyboardButton(f"❌ {to_small_caps('Cancel')}", callback_data=f"pay_cancel:{token}")
         ]
     ])
 
@@ -381,7 +247,6 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     pending_payments[token]["message_id"] = msg.message_id
 
 async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle callback queries for payment confirmation."""
     query = update.callback_query
     await query.answer()
 
@@ -393,7 +258,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     pending = pending_payments.get(token)
     if not pending:
         try:
-            await query.edit_message_text(premium_format("✖️ ᴛʜɪs ᴘᴀʏᴍᴇɴᴛ ʀᴇǫᴜᴇsᴛ ʜᴀs ᴇxᴘɪʀᴇᴅ ᴏʀ ɪs ɪɴᴠᴀʟɪᴅ."))
+            await query.edit_message_text("⏳ <b>This payment request has expired or is invalid.</b>", parse_mode="HTML")
         except Exception:
             pass
         return
@@ -403,16 +268,14 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     amount = pending["amount"]
     created_at = pending["created_at"]
 
-    # Only sender can confirm/cancel
     user_who_clicked = query.from_user.id
     if user_who_clicked != sender_id:
-        await query.answer("ᴏɴʟʏ ᴛʜᴇ ᴘᴀʏᴍᴇɴᴛ ɪɴɪᴛɪᴀᴛᴏʀ ᴄᴀɴ ᴄᴏɴғɪʀᴍ ᴏʀ ᴄᴀɴᴄᴇʟ ᴛʜɪs ᴘᴀʏᴍᴇɴᴛ.", show_alert=True)
+        await query.answer("⚠️ Only the payment initiator can confirm or cancel this payment.", show_alert=True)
         return
 
-    # Check expiry
     if time.time() - created_at > PENDING_EXPIRY_SECONDS:
         try:
-            await query.edit_message_text(premium_format("⏱️ ᴛʜɪs ᴘᴀʏᴍᴇɴᴛ ʀᴇǫᴜᴇsᴛ ʜᴀs ᴇxᴘɪʀᴇᴅ."))
+            await query.edit_message_text("⏳ <b>Payment request expired.</b>", parse_mode="HTML")
         except Exception:
             pass
         pending_payments.pop(token, None)
@@ -420,44 +283,40 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if action == "pay_cancel":
         try:
-            await query.edit_message_text(premium_format("✘ ᴘᴀʏᴍᴇɴᴛ ᴄᴀɴᴄᴇʟʟᴇᴅ ʙʏ sᴇɴᴅᴇʀ."))
+            await query.edit_message_text(f"❌ <b>{to_small_caps('Payment Cancelled')}</b>\n\n⚠️ <i>The transaction has been cancelled by the sender.</i>", parse_mode="HTML")
         except Exception:
             pass
         pending_payments.pop(token, None)
         return
 
-    # action == pay_confirm
     now = time.time()
     next_allowed = pay_cooldowns.get(sender_id, 0)
     if now < next_allowed:
         remaining = int(next_allowed - now)
-        await query.edit_message_text(premium_format(f"⏱️ ʏᴏᴜ ᴍᴜsᴛ ᴡᴀɪᴛ {remaining}s ʙᴇғᴏʀᴇ ᴍᴀᴋɪɴɢ ᴀɴᴏᴛʜᴇʀ ᴘᴀʏᴍᴇɴᴛ."))
-        pending_payments.pop(token, None)
-        return
-
-    # Perform atomic transfer
-    success = await _atomic_transfer(sender_id, target_id, amount)
-    if not success:
         try:
-            await query.edit_message_text(premium_format("✘ ᴛʀᴀɴsᴀᴄᴛɪᴏɴ ғᴀɪʟᴇᴅ: ɪɴsᴜғғɪᴄɪᴇɴᴛ ғᴜɴᴅs ᴏʀ ɪɴᴛᴇʀɴᴀʟ ᴇʀʀᴏʀ."))
+            await query.edit_message_text(f"⏳ <b>{to_small_caps('Cooldown Active!')}</b>\n\n⏱️ <i>Please wait <b>{remaining}s</b> before making another payment.</i>", parse_mode="HTML")
         except Exception:
             pass
         pending_payments.pop(token, None)
         return
 
-    # Success: set cooldown
+    success = await _atomic_transfer(sender_id, target_id, amount)
+    if not success:
+        try:
+            await query.edit_message_text(f"❌ <b>{to_small_caps('Transaction Failed!')}</b>\n\n⚠️ <i>Insufficient funds or internal error occurred.</i>", parse_mode="HTML")
+        except Exception:
+            pass
+        pending_payments.pop(token, None)
+        return
+
     pay_cooldowns[sender_id] = time.time() + PAY_COOLDOWN_SECONDS
 
-    # Edit message to show success
     try:
-        sender_name = escape(getattr(query.from_user, "first_name", str(sender_id)))
+        new_balance = await get_balance(sender_id)
         target_chat = await context.bot.get_chat(target_id)
         target_name = escape(getattr(target_chat, "first_name", str(target_id)))
-        confirmed_text = f"✓ <b>ᴘᴀʏᴍᴇɴᴛ sᴜᴄᴄᴇssғᴜʟ</b>\n\n" \
-                         f"ꜱᴇɴᴅᴇʀ: <a href='tg://user?id={sender_id}'>{sender_name}</a>\n" \
-                         f"ʀᴇᴄɪᴘɪᴇɴᴛ: <a href='tg://user?id={target_id}'>{target_name}</a>\n" \
-                         f"ᴀᴍᴏᴜɴᴛ: <b>{amount:,}</b> ᴄᴏɪɴs\n\n" \
-                         f"ɴᴇxᴛ ᴘᴀʏᴍᴇɴᴛ ᴀʟʟᴏᴡᴇᴅ ᴀғᴛᴇʀ {PAY_COOLDOWN_SECONDS} ꜱᴇᴄᴏɴᴅꜱ."
+        confirmed_text = f"✅ You paid <b>{amount:,}</b> coins to <a href='tg://user?id={target_id}'>{target_name}</a>.\n" \
+                         f"💰 Your New Balance: <b>{new_balance:,}</b> coins"
         await query.edit_message_text(confirmed_text, parse_mode="HTML")
     except Exception:
         pass
@@ -465,31 +324,29 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     pending_payments.pop(token, None)
 
 async def admin_addbal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/addbal <user_id> <amount> - admin-only adjust balance in user_collection."""
     user_id = update.effective_user.id
     if user_id != OWNER_ID and user_id not in SUDO_USERS:
-        await update.message.reply_text(premium_format("✘ ɴᴏᴛ ᴀᴜᴛʜᴏʀɪᴢᴇᴅ."))
+        await update.message.reply_text("❌ <b>Not Authorized.</b>", parse_mode="HTML")
         return
 
     if len(context.args) < 2:
-        await update.message.reply_text(premium_format("Usage: /addbal <user_id> <amount>"))
+        await update.message.reply_text("ℹ️ <b>Usage:</b> <code>/addbal &lt;user_id&gt; &lt;amount&gt;</code>", parse_mode="HTML")
         return
 
     try:
         target = int(context.args[0])
         amount = int(context.args[1])
     except ValueError:
-        await update.message.reply_text(premium_format("✘ ɪɴᴠᴀʟɪᴅ ᴀʀɢᴜᴍᴇɴᴛs."))
+        await update.message.reply_text("❌ <b>Invalid arguments.</b>", parse_mode="HTML")
         return
 
     try:
         new_bal = await change_balance(target, amount)
-        message = f"✓ ᴜᴘᴅᴀᴛᴇᴅ ʙᴀʟᴀɴᴄᴇ ғᴏʀ <a href='tg://user?id={target}'>ᴜsᴇʀ</a>: <b>{new_bal:,}</b>"
+        message = f"✅ <b>Updated balance for</b> <a href='tg://user?id={target}'>User</a>: <b>{new_bal:,}</b> {to_small_caps('coins')}"
         await update.message.reply_text(message, parse_mode="HTML")
     except Exception:
-        await update.message.reply_text(premium_format("✘ ғᴀɪʟᴇᴅ ᴛᴏ ᴜᴘᴅᴀᴛᴇ ʙᴀʟᴀɴᴄᴇ."))
+        await update.message.reply_text("❌ <b>Failed to update balance.</b>", parse_mode="HTML")
 
-# Register handlers
 application.add_handler(CommandHandler(["balance", "bal"], balance_cmd, block=False))
 application.add_handler(CommandHandler("pay", pay_cmd, block=False))
 application.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^pay_", block=False))
