@@ -409,7 +409,7 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
 
         try:
-            await coin_alert_msg.set_reaction([ReactionTypeEmoji(emoji=random.choice(["🎉", "❤️", "🔥", "⚡", "🌟", "🎁", "👏", "🏆"]))])
+            await coin_alert_msg.set_reaction([ReactionTypeEmoji(emoji=random.choice(["🎉", "❤️", "🔥", "⚡", "👍", "👏", "🤩", "😍"]))])
         except Exception as e:
             LOGGER.exception(f"Failed to set reaction: {e}")
 
