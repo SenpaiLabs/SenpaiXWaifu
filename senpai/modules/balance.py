@@ -144,7 +144,7 @@ async def balance_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     bal = await get_balance(user_id)
     name = escape(getattr(target, "first_name", str(user_id)))
 
-    message = f"🏦 <b>{to_small_caps('Bank of Senpai')}</b>\n\n👤 <b>User:</b> <b>{name}</b>\n💰 <b>{to_small_caps('Balance')}:</b> <b>{bal:,}</b> {to_small_caps('coins')}"
+    message = f"💰 <b>{to_small_caps('Balance')}:</b> <b>{bal:,}</b> {to_small_caps('coins')}"
     await update.message.reply_text(message, parse_mode="HTML")
 
 async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -230,11 +230,8 @@ async def pay_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     sender_name = escape(getattr(sender, "first_name", str(sender.id)))
 
-    text = f"💸 <b>{to_small_caps('Payment Confirmation')}</b>\n\n" \
-           f"👤 <b>{to_small_caps('Sender')}:</b> <a href='tg://user?id={sender.id}'>{sender_name}</a>\n" \
-           f"👤 <b>{to_small_caps('Recipient')}:</b> <a href='tg://user?id={target_id}'>{target_name}</a>\n" \
-           f"💰 <b>{to_small_caps('Amount')}:</b> <b>{amount:,}</b> {to_small_caps('coins')}\n\n" \
-           f"❓ <i>Are you sure you want to proceed with this transaction?</i>"
+    text = f"Ŧ <b>{amount:,}</b> {to_small_caps('tokens have been deducted from your account.')}\n\n" \
+           f"{to_small_caps('Confirm to send to')} <a href='tg://user?id={target_id}'>{target_name}</a>{to_small_caps(', or cancel to get your tokens back.')}"
 
     keyboard = InlineKeyboardMarkup([
         [
@@ -315,8 +312,8 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         new_balance = await get_balance(sender_id)
         target_chat = await context.bot.get_chat(target_id)
         target_name = escape(getattr(target_chat, "first_name", str(target_id)))
-        confirmed_text = f"✅ You paid <b>{amount:,}</b> coins to <a href='tg://user?id={target_id}'>{target_name}</a>.\n" \
-                         f"💰 Your New Balance: <b>{new_balance:,}</b> coins"
+        confirmed_text = f"✅ {to_small_caps('You paid')} <b>{amount:,}</b> {to_small_caps('coins to')} <a href='tg://user?id={target_id}'>{target_name}</a>.\n" \
+                         f"💰 {to_small_caps('Your New Balance')}: <b>{new_balance:,}</b> {to_small_caps('coins')}"
         await query.edit_message_text(confirmed_text, parse_mode="HTML")
     except Exception:
         pass

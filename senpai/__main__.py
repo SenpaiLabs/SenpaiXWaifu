@@ -403,13 +403,13 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                 LOGGER.exception(f"Failed to update daily group guess: {e}")
 
         coin_alert_msg = await update.message.reply_text(
-            "ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ! ʏᴏᴜ ɢᴜᴇꜱꜱᴇᴅ ɪᴛ ʀɪɢʜᴛ! "
-            "ᴀꜱ ᴀ ʀᴇᴡᴀʀᴅ, 100 ᴄᴏɪɴꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ.",
+            "🎊 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ! ʏᴏᴜ ɢᴜᴇꜱꜱᴇᴅ ɪᴛ ʀɪɢʜᴛ!</b>\n"
+            "🎁 <i>ᴀꜱ ᴀ ʀᴇᴡᴀʀᴅ, 100 ᴄᴏɪɴꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ʙᴀʟᴀɴᴄᴇ!</i>",
             parse_mode='HTML'
         )
 
         try:
-            await coin_alert_msg.set_reaction("🎉")
+            await coin_alert_msg.set_reaction(random.choice(["🎉", "❤️", "🔥", "✨", "🏆", "🎁", "⚡", "🌟"]))
         except Exception as e:
             LOGGER.exception(f"Failed to set reaction: {e}")
 
@@ -421,12 +421,12 @@ async def guess(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         character_id = escape(format_character_id(character.get('id', 'Unknown')))
 
         reveal_message = (
-            f"ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ {safe_name} ᴛʜɪꜱ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ.\n\n"
-            f"ɴᴀᴍᴇ: {character_name}\n"
-            f"ᴀɴɪᴍᴇ: {anime_name}\n"
-            f"ʀᴀʀɪᴛʏ: {safe_rarity}\n"
-            f"ɪᴅ: {character_id}\n\n"
-            f"ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴀᴅᴅᴇᴅ ᴛᴏ ʜᴀʀᴇᴍ."
+            f"🎉 <b>ᴄᴏɴɢʀᴀᴛᴜʟᴀᴛɪᴏɴꜱ</b> {safe_name}! <b>ᴛʜɪꜱ ᴄʜᴀʀᴀᴄᴛᴇʀ ʜᴀꜱ ʙᴇᴇɴ ᴀᴅᴅᴇᴅ ᴛᴏ ʏᴏᴜʀ ʜᴀʀᴇᴍ.</b>\n\n"
+            f"🎭 <b>ɴᴀᴍᴇ</b> ➥ {character_name}\n"
+            f"⛩️ <b>ᴀɴɪᴍᴇ</b> ➥ {anime_name}\n"
+            f"💎 <b>ʀᴀʀɪᴛʏ</b> ➥ {safe_rarity}\n"
+            f"🎟️ <b>ɪᴅ</b> ➥ {character_id}\n\n"
+            f"✨ ꜱᴜᴄᴄᴇꜱꜱꜰᴜʟʟʏ ᴀᴅᴅᴇᴅ ᴛᴏ ʜᴀʀᴇᴍ!"
         )
 
         keyboard = InlineKeyboardMarkup(
