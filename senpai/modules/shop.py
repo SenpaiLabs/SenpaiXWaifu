@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from html import escape
 from typing import List, Dict, Optional, Tuple
+from pymongo import ReturnDocument
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
@@ -68,12 +69,12 @@ async def get_balance(user_id: int) -> int:
 
 async def change_balance(user_id: int, amount: int) -> int:
     """Change user's balance atomically."""
-    await user_collection.update_one(
+    user = await user_collection.find_one_and_update(
         {"id": user_id},
         {"$inc": {"balance": int(amount)}},
-        upsert=True
+        upsert=True,
+        return_document=ReturnDocument.AFTER
     )
-    user = await user_collection.find_one({'id': user_id})
     return int(user.get('balance', 0)) if user else 0
 
 
@@ -123,17 +124,35 @@ async def add_character_to_user(user_id: int, character: dict) -> bool:
         return False
 
 
-async def fetch_shop_characters() -> List[dict]:
-    """Fetch all eligible characters for shop (handles string/emoji rarities)."""
+async def fetch_random_shop_characters(count: int = 3) -> List[dict]:
+    """Fetch random eligible characters for shop efficiently using aggregation."""
+    # Build match conditions that account for Integer, String, and Emoji rarities
+    match_conds = []
+    for r in SHOP_RARITIES:
+        match_conds.append(r)
+        match_conds.append(str(r))
+        name = RARITY_NAMES.get(r, '')
+        emoji = RARITY_EMOJIS.get(r, '')
+        if name:
+            match_conds.append(name.lower())
+            match_conds.append(name.capitalize())
+        if emoji:
+            match_conds.append(emoji)
+            if name:
+                match_conds.append(f"{emoji} {name}")
+                
+    pipeline = [
+        {'$match': {'rarity': {'$in': match_conds}}},
+        {'$sample': {'size': count}}
+    ]
+
     all_chars = []
-    async for char in collection.find({}):
+    async for char in collection.aggregate(pipeline):
         rarity_val = char.get('rarity', 1)
         rarity_int = get_rarity_from_string(rarity_val)
-
-        if rarity_int in SHOP_RARITIES:
-            char['rarity'] = rarity_int
-            char = normalize_character_document(char)
-            all_chars.append(char)
+        char['rarity'] = rarity_int
+        char = normalize_character_document(char)
+        all_chars.append(char)
 
     return all_chars
 
@@ -151,12 +170,11 @@ async def get_shop_data(user_id: int) -> dict:
 
     # Check if shop needs reset (daily at midnight IST)
     last_reset = shop_data.get('last_reset', 0)
-    next_reset = get_ist_midnight().timestamp()
-
-    current_time = time.time()
-
-    # If last reset was before the last midnight, reset shop
-    if last_reset < (current_time - 86400):  # More than 24 hours
+    
+    # Check if last_reset happened before the most recent midnight
+    last_midnight_utc = get_ist_midnight() - timedelta(days=1)
+    
+    if last_reset < last_midnight_utc.timestamp():
         shop_data = await initialize_shop_data(user_id)
 
     return shop_data
@@ -166,12 +184,8 @@ async def initialize_shop_data(user_id: int) -> dict:
     """Initialize new shop data for user."""
     characters = []
 
-    eligible_chars = await fetch_shop_characters()
-
-    if len(eligible_chars) >= 3:
-        selected_chars = random.sample(eligible_chars, 3)
-    else:
-        selected_chars = eligible_chars
+    # Get max 3 random eligible characters directly from DB
+    selected_chars = await fetch_random_shop_characters(3)
 
     for char in selected_chars:
         rarity = char.get('rarity', 4)
@@ -235,15 +249,11 @@ async def refresh_shop(user_id: int) -> Tuple[bool, str]:
     await change_balance(user_id, -REFRESH_COST)
 
     # Generate new characters
-    characters = []
-    pipeline = [
-        {'$match': {'rarity': {'$in': SHOP_RARITIES}}},
-        {'$sample': {'size': 3}}
-    ]
+    selected_chars = await fetch_random_shop_characters(3)
 
-    async for char in collection.aggregate(pipeline):
+    characters = []
+    for char in selected_chars:
         rarity = char.get('rarity', 4)
-        rarity = get_rarity_from_string(rarity)
 
         price_range = PRICE_RANGES.get(rarity, (400000, 500000))
         base_price = random.randint(price_range[0], price_range[1])
@@ -305,12 +315,6 @@ async def display_shop_character(update: Update, context: CallbackContext,
 
     # Ensure index is valid
     index = max(0, min(index, len(characters) - 1))
-
-    # Update current index
-    await user_collection.update_one(
-        {'id': user_id},
-        {'$set': {'shop_data.current_index': index}}
-    )
 
     char = characters[index]
 
@@ -695,9 +699,12 @@ async def process_purchase(update: Update, context: CallbackContext,
         )
         return
 
-    # Check balance
-    balance = await get_balance(user_id)
-    if balance < char['final_price']:
+    # Ensure atomic balance check & deduct
+    result = await user_collection.update_one(
+        {"id": user_id, "balance": {"$gte": char['final_price']}},
+        {"$inc": {"balance": -char['final_price']}}
+    )
+    if result.modified_count == 0:
         await query.answer(
             to_small_caps(f"⚠️ Insufficient balance! Need {char['final_price']:,} coins"),
             show_alert=True
@@ -707,16 +714,16 @@ async def process_purchase(update: Update, context: CallbackContext,
     # Get full character data from collection
     full_char = await collection.find_one(character_id_query(char['id']))
     if not full_char:
+        # Refund on failure
+        await change_balance(user_id, char['final_price'])
         await query.answer(to_small_caps("⚠️ Character not found in database!"), show_alert=True)
         return
-
-    # Deduct balance
-    new_balance = await change_balance(user_id, -char['final_price'])
 
     # Add character to user
     success = await add_character_to_user(user_id, full_char)
 
     if success:
+        new_balance = await get_balance(user_id)
         # Show success message
         safe_name = escape(str(char['name']))
 
