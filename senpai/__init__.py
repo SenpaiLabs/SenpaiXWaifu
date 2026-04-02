@@ -45,7 +45,6 @@ TOKEN = Config.TOKEN
 MONGO_URL = Config.MONGO_URL
 
 OWNER_ID = Config.OWNER_ID
-SUDO_USERS = Config.SUDO_USERS
 GROUP_ID = Config.GROUP_ID
 CHARA_CHANNEL_ID = Config.CHARA_CHANNEL_ID
 VIDEO_URL = Config.VIDEO_URL
@@ -282,7 +281,6 @@ def create_background_task(coro):
 
 # ---------------- BACKWARD COMPAT ---------------- #
 
-sudo_users = SUDO_USERS
 api_id = API_ID
 api_hash = API_HASH
 mongo_url = MONGO_URL
@@ -297,7 +295,6 @@ __all__ = [
     "TOKEN",
     "CHARA_CHANNEL_ID",
     "SUPPORT_CHAT",
-    "SUDO_USERS",
     "OWNER_ID",
     "user_balance_coll",
     "change_balance",

@@ -10,7 +10,7 @@ from telegram.ext import CommandHandler, ContextTypes
 
 from senpai import application, user_collection, collection, LOGGER
 from senpai.character_ids import character_id_query, normalize_character_document
-from senpai.security import is_owner_or_sudo
+from senpai.security import can_give_characters
 from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display
 
 
@@ -19,12 +19,12 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """
     /give <character_id>
     Give a character to a user by replying to their message.
-    Admin only command.
+    Staff command for sudo, developer, and owner roles.
     """
-    admin_id = update.effective_user.id
+    actor_id = update.effective_user.id
     
-    # Check if user is admin (Owner or Sudo user)
-    if not is_owner_or_sudo(admin_id):
+    # Check if user has staff permission
+    if not await can_give_characters(actor_id):
         await update.message.reply_text(
             "❌ " + to_small_caps("You are not authorized to use this command.")
         )
@@ -122,7 +122,7 @@ async def give_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             upsert=True
         )
         
-        LOGGER.debug(f"Admin {admin_id} gave character {character_id} ({character_name}) to user {target_user_id}")
+        LOGGER.debug(f"Staff user {actor_id} gave character {character_id} ({character_name}) to user {target_user_id}")
         
         # Success message with character image
         success_msg = (

@@ -20,10 +20,13 @@ from senpai.character_ids import (
     normalize_character_document,
     normalize_character_id,
 )
-from senpai.security import is_owner_or_sudo
+from senpai.security import can_generate_redeem_codes
 from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display
 
 redeem_codes_collection = db.redeem_codes
+_redeem_rate_limiter: Dict[int, list[float]] = {}
+_RATE_LIMIT_WINDOW = 10
+_RATE_LIMIT_MAX = 5
 
 def generate_unique_code(length: int = 8) -> str:
     alphabet = string.ascii_lowercase + string.digits
@@ -370,7 +373,7 @@ async def redeem_code(code: str, user_id: int) -> Dict[str, Any]:
 async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
-    if not is_owner_or_sudo(user_id):
+    if not await can_generate_redeem_codes(user_id):
         await update.message.reply_text("❌ " + to_small_caps("You are not authorized to use this command."))
         return
 
@@ -418,7 +421,7 @@ async def gen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def sgen_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
-    if not is_owner_or_sudo(user_id):
+    if not await can_generate_redeem_codes(user_id):
         await update.message.reply_text("❌ " + to_small_caps("You are not authorized to use this command."))
         return
 

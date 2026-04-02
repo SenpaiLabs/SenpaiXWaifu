@@ -23,19 +23,6 @@ def _get_optional_int(name: str) -> Optional[int]:
         raise ValueError(f"{name} must be an integer") from exc
 
 
-def _get_int_list(name: str, default: str = "") -> List[int]:
-    raw_value = os.getenv(name, default)
-    values: List[int] = []
-    for item in raw_value.split(","):
-        cleaned = item.strip()
-        if not cleaned:
-            continue
-        if not cleaned.lstrip("-").isdigit():
-            raise ValueError(f"{name} must contain only comma-separated integers")
-        values.append(int(cleaned))
-    return values
-
-
 def _get_bool(name: str, default: bool = False) -> bool:
     raw_value = os.getenv(name)
     if raw_value is None:
@@ -55,8 +42,6 @@ class Config:
     API_HASH: str = os.getenv("API_HASH", "").strip()
 
     OWNER_ID: Optional[int] = _get_optional_int("OWNER_ID")
-    SUDO_USERS: List[int] = _get_int_list("SUDO_USERS")
-    EVAL_USERS: List[int] = _get_int_list("EVAL_USERS")
 
     GROUP_ID: Optional[int] = _get_optional_int("GROUP_ID")
     CHARA_CHANNEL_ID: Optional[int] = _get_optional_int("CHARA_CHANNEL_ID")
@@ -110,14 +95,6 @@ class Config:
                 print(f"   - {error}")
             print("\nPlease set the required environment variables and try again.")
             sys.exit(1)
-
-        if cls.OWNER_ID not in cls.SUDO_USERS:
-            cls.SUDO_USERS.append(cls.OWNER_ID)
-
-        if not cls.EVAL_USERS:
-            cls.EVAL_USERS = [cls.OWNER_ID]
-        elif cls.OWNER_ID not in cls.EVAL_USERS:
-            cls.EVAL_USERS.append(cls.OWNER_ID)
 
 
 class Production(Config):

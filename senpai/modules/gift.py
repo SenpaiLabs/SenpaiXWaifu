@@ -18,7 +18,7 @@ from senpai.character_ids import (
     normalize_character_document,
     normalize_character_id,
 )
-from senpai.security import is_owner_or_sudo
+from senpai.security import is_owner
 from senpai.utils import to_small_caps, RARITY_MAP
 
 logging.basicConfig(level=logging.INFO)
@@ -799,7 +799,7 @@ async def check_pending(client, message):
 
 @senpaii.on_message(filters.command("clearpending"))
 async def clear_pending(client, message):
-    if not message.from_user or not is_owner_or_sudo(message.from_user.id):
+    if not message.from_user or not is_owner(message.from_user.id):
         await message.reply_text("âŒ You are not authorized to clear pending operations.")
         return
 

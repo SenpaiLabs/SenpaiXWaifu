@@ -20,7 +20,8 @@ from telegram.ext import (
     CallbackQueryHandler,
 )
 
-from senpai import application, db, BOT_USERNAME, GROUP_ID, OWNER_ID, SUDO_USERS
+from senpai import application, db, BOT_USERNAME, GROUP_ID
+from senpai.security import is_owner
 from senpai import user_collection
 from senpai.utils import small_caps
 
@@ -691,8 +692,8 @@ async def send_topstreak_page(update_or_query, context, page: int, edit: bool = 
 
 async def refstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != OWNER_ID and user.id not in SUDO_USERS:
-        await update.message.reply_text("⛔ ᴀᴅᴍɪɴ ᴏɴʟʏ.")
+    if not is_owner(user.id):
+        await update.message.reply_text("⛔ ᴏᴡɴᴇʀ ᴏɴʟʏ.")
         return
 
     total_refs_pipeline = [
@@ -751,8 +752,8 @@ async def refstats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def setrefconfig_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id != OWNER_ID and user.id not in SUDO_USERS:
-        await update.message.reply_text("⛔ ᴀᴅᴍɪɴ ᴏɴʟʏ.")
+    if not is_owner(user.id):
+        await update.message.reply_text("⛔ ᴏᴡɴᴇʀ ᴏɴʟʏ.")
         return
 
     if not context.args or len(context.args) < 2:

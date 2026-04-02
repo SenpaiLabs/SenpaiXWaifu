@@ -9,19 +9,19 @@ from telegram import Update
 from telegram.ext import CommandHandler, CallbackContext
 
 from senpai import application
-from senpai.security import is_owner_or_sudo
+from senpai.security import is_owner
 
 async def ping(update: Update, context: CallbackContext) -> None:
     """
     ᴘɪɴɢ ᴄᴏᴍᴍᴀɴᴅ ᴛᴏ ᴄʜᴇᴄᴋ ʙᴏᴛ ʟᴀᴛᴇɴᴄʏ.
-    ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ sᴜᴅᴏ ᴜsᴇʀs ᴏɴʟʏ.
+    ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ᴏᴡɴᴇʀ ᴏɴʟʏ.
     """
     user_id = update.effective_user.id
     
-    # ᴄʜᴇᴄᴋ ɪғ ᴜsᴇʀ ɪs ᴀᴜᴛʜᴏʀɪᴢᴇᴅ (sᴜᴅᴏ ᴜsᴇʀs ᴏʀ ᴏᴡɴᴇʀ)
-    if not is_owner_or_sudo(user_id):
+    # ᴄʜᴇᴄᴋ ɪғ ᴜsᴇʀ ɪs ᴛʜᴇ ᴏᴡɴᴇʀ
+    if not is_owner(user_id):
         await update.message.reply_text(
-            "⚠️ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ sᴜᴅᴏ ᴜsᴇʀs ᴏɴʟʏ."
+            "⚠️ ᴛʜɪs ᴄᴏᴍᴍᴀɴᴅ ɪs ʀᴇsᴛʀɪᴄᴛᴇᴅ ᴛᴏ ᴛʜᴇ ᴏᴡɴᴇʀ ᴏɴʟʏ."
         )
         return
 

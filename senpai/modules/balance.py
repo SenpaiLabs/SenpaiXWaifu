@@ -15,7 +15,8 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 
 from pymongo import ReturnDocument
 
-from senpai import application, user_collection, LOGGER, OWNER_ID, SUDO_USERS
+from senpai import application, user_collection, LOGGER
+from senpai.security import is_owner
 from senpai.utils import to_small_caps
 
 pending_payments: Dict[str, Dict[str, Any]] = {}
@@ -322,7 +323,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def admin_addbal_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
-    if user_id != OWNER_ID and user_id not in SUDO_USERS:
+    if not is_owner(user_id):
         await update.message.reply_text("❌ <b>Not Authorized.</b>", parse_mode="HTML")
         return
 

@@ -111,7 +111,6 @@
 
 | Variable | Default | Description |
 |---|---|---|
-| `SUDO_USERS` | `None` | Comma-separated list of sudo user IDs |
 | `BOT_USERNAME` | `Senpai_Waifu_Grabbing_Bot` | Bot username without @ |
 | `SUPPORT_CHAT` | `THE_DRAGON_SUPPORT` | Support group username |
 | `UPDATE_CHAT` | `Senpai_Updates` | Updates channel username |
@@ -126,7 +125,7 @@
 
 ```bash
 # Step 1 — Install dependencies
-sudo apt update && sudo apt install -y python3 python3-pip git tmux
+apt update && apt install -y python3 python3-pip git tmux
 
 # Step 2 — Clone the repo
 git clone https://github.com/SenpaiLabs/SenpaiXWaifu.git
@@ -226,7 +225,7 @@ sclaim         — Claim your daily waifu
 claim          — Claim your daily coins
 referral       — View referral dashboard
 
-— Sudo Commands —
+— Owner Commands —
 upload         — Add a new character
 delete         — Remove a character
 update         — Update character info
@@ -240,7 +239,6 @@ set_off        — Disable rarity in group
 lock           — Lock a character from spawning
 unlock         — Unlock a character
 
-— Owner Commands —
 ping           — Check bot latency
 broadcast      — Message all users/groups
 changetime     — Change spawn frequency globally
@@ -261,7 +259,7 @@ SenpaiXWaifu/
 │   ├── __init__.py          # App init, DB connections, exports
 │   ├── __main__.py          # Bot entry point, guess logic
 │   ├── config.py            # Environment config loader
-│   ├── security.py          # Permission checks (owner/sudo)
+│   ├── security.py          # Permission checks (owner-only)
 │   ├── character_ids.py     # Character ID normalization
 │   └── modules/
 │       ├── __init__.py      # Module auto-discovery

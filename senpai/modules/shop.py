@@ -20,7 +20,7 @@ from senpai.character_ids import (
     normalize_character_document,
     normalize_character_id,
 )
-from senpai.security import is_owner_or_sudo
+from senpai.security import is_owner
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, get_rarity_from_string
 
 # Shop Configuration
@@ -805,8 +805,8 @@ async def resetshop_command(update: Update, context: CallbackContext) -> None:
     """Handle /resetshop command - Owner only."""
     user_id = update.effective_user.id
 
-    # Check if user is owner or sudo
-    if not is_owner_or_sudo(user_id):
+    # Check if user is owner
+    if not is_owner(user_id):
         await update.message.reply_text(to_small_caps("⚠️ You are not authorized to use this command!"))
         return
 

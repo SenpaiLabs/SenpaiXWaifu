@@ -18,7 +18,7 @@ from senpai.character_ids import (
     format_character_id,
     normalize_character_id,
 )
-from senpai.security import is_owner_or_sudo
+from senpai.security import is_owner
 from senpai import senpaii
 from senpai.utils import to_small_caps, RARITY_MAP, RARITY_TEXT_TO_NUMBER
 
@@ -29,7 +29,7 @@ disabled_rarities_cache = TTLCache(maxsize=100000, ttl=300)
 locked_characters_cache = TTLCache(maxsize=1, ttl=300)
 
 def is_authorized(user_id: int) -> bool:
-    return is_owner_or_sudo(user_id)
+    return is_owner(user_id)
 
 async def get_chat_rarity_settings(chat_id: int) -> Dict[str, Any]:
     settings = await rarity_settings_collection.find_one({'chat_id': chat_id})
@@ -65,7 +65,7 @@ async def set_on(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not is_authorized(user_id):
         await update.message.reply_text(
-            to_small_caps("⛔ You are not authorized to use this command. Only owner and sudo users can use it.")
+            to_small_caps("⛔ You are not authorized to use this command. Only the owner can use it.")
         )
         return
     
@@ -126,7 +126,7 @@ async def set_off(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not is_authorized(user_id):
         await update.message.reply_text(
-            to_small_caps("⛔ You are not authorized to use this command. Only owner and sudo users can use it.")
+            to_small_caps("⛔ You are not authorized to use this command. Only the owner can use it.")
         )
         return
     
@@ -186,7 +186,7 @@ async def lock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not is_authorized(user_id):
         await update.message.reply_text(
-            to_small_caps("⛔ You are not authorized to use this command. Only owner and sudo users can use it.")
+            to_small_caps("⛔ You are not authorized to use this command. Only the owner can use it.")
         )
         return
     
@@ -254,7 +254,7 @@ async def unlock(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not is_authorized(user_id):
         await update.message.reply_text(
-            to_small_caps("⛔ You are not authorized to use this command. Only owner and sudo users can use it.")
+            to_small_caps("⛔ You are not authorized to use this command. Only the owner can use it.")
         )
         return
     
@@ -304,7 +304,7 @@ async def locklist(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     if not is_authorized(user_id):
         await update.message.reply_text(
-            to_small_caps("⛔ You are not authorized to use this command. Only owner and sudo users can use it.")
+            to_small_caps("⛔ You are not authorized to use this command. Only the owner can use it.")
         )
         return
     

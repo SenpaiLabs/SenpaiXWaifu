@@ -22,7 +22,7 @@ from telegram.ext import CommandHandler, CallbackContext
 from senpai import application, collection, db, CHARA_CHANNEL_ID, SUPPORT_CHAT
 from senpai.character_ids import character_id_query, format_character_id, normalize_character_id
 from senpai.config import Config
-from senpai.security import is_owner_or_sudo
+from senpai.security import can_manage_upload_catalog, can_upload_characters
 from senpai.utils import to_small_caps
 
 logging.basicConfig(
@@ -79,13 +79,25 @@ WRONG_FORMAT_TEXT = f"""<b>{to_small_caps('Example')}:</b>
 14 - 🍭 ᴋᴀᴡᴀɪɪ
 15 - 🧬 ʜʏʙʀɪᴅ"""
 
-def admin_only(func):
-    """Check if user is owner or sudo user"""
+def uploader_or_higher(func):
+    """Allow uploader, sudo, developer, and owner roles."""
     @wraps(func)
     async def wrapper(update: Update, context: CallbackContext, *args, **kwargs):
         user_id = update.effective_user.id
-        if not is_owner_or_sudo(user_id):
+        if not await can_upload_characters(user_id):
             await update.message.reply_text('⛔ You do not have permission to use this command.')
+            logger.warning(f"Unauthorized access attempt by user {user_id}")
+            return
+        return await func(update, context, *args, **kwargs)
+    return wrapper
+
+def staff_or_higher(func):
+    """Allow sudo, developer, and owner roles."""
+    @wraps(func)
+    async def wrapper(update: Update, context: CallbackContext, *args, **kwargs):
+        user_id = update.effective_user.id
+        if not await can_manage_upload_catalog(user_id):
+            await update.message.reply_text("You do not have permission to use this command.")
             logger.warning(f"Unauthorized access attempt by user {user_id}")
             return
         return await func(update, context, *args, **kwargs)
@@ -212,7 +224,7 @@ async def get_next_sequence_number(sequence_name):
     )
     return int(sequence_document['sequence_value'])
 
-@admin_only
+@uploader_or_higher
 @log_command
 async def upload(update: Update, context: CallbackContext) -> None:
     """Enhanced upload command with progress tracking"""
@@ -345,7 +357,7 @@ async def upload(update: Update, context: CallbackContext) -> None:
             parse_mode='HTML'
         )
 
-@admin_only
+@staff_or_higher
 @log_command
 async def delete(update: Update, context: CallbackContext) -> None:
     """Enhanced delete command"""
@@ -398,7 +410,7 @@ async def delete(update: Update, context: CallbackContext) -> None:
         logger.error(f"Delete failed: {e}", exc_info=True)
         await update.message.reply_text(f'❌ Error: {str(e)[:200]}')
 
-@admin_only
+@staff_or_higher
 @log_command
 async def update(update: Update, context: CallbackContext) -> None:
     """Enhanced update command"""
@@ -528,7 +540,7 @@ async def update(update: Update, context: CallbackContext) -> None:
         logger.error(f"Update failed: {e}", exc_info=True)
         await update.message.reply_text(f'❌ Error: {str(e)[:200]}')
 
-@admin_only
+@staff_or_higher
 async def stats(update: Update, context: CallbackContext) -> None:
     """Show database statistics"""
     try:
@@ -569,7 +581,7 @@ application.add_handler(CommandHandler('delete', delete, block=False))
 application.add_handler(CommandHandler('update', update, block=False))
 application.add_handler(CommandHandler('stats', stats, block=False))
 
-logger.info("Admin module loaded successfully")
+logger.info("Staff upload module loaded successfully")
 
 # (c) @SenpaiLabs
 # SenpaiLabs Developer 

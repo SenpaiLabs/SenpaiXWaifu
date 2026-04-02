@@ -33,7 +33,7 @@ from senpai import (
     senpaii
 )
 from senpai.config import Config
-from senpai.security import is_owner, is_owner_or_sudo
+from senpai.security import is_owner
 
 LOGGER = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id = update.effective_user.id
     
-    if not is_owner_or_sudo(user_id):
+    if not is_owner(user_id):
         await update.message.reply_text("❌ You are not authorized to use this command.")
         return
     
