@@ -7,17 +7,15 @@
 import random
 import secrets
 import string
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-from html import escape
-import asyncio
+from datetime import datetime, timezone, timedelta
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 
-from senpai import application, user_collection, collection, db, LOGGER
-from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display, get_rarity_from_string
+from senpai import application, user_collection, db, LOGGER
+from senpai.utils import to_small_caps
 from senpai.config import Config
+
 SUPPORT_GROUP = f"https://t.me/{Config.SUPPORT_CHAT}"
 SUPPORT_CHANNEL = f"https://t.me/{Config.UPDATE_CHAT}"
 SUPPORT_GROUP_REF = f"@{Config.SUPPORT_CHAT}"
@@ -159,11 +157,17 @@ async def send_cooldown_message(update: Update, time_str: str):
         parse_mode="HTML"
     )
 
+claim_codes_collection = db.claim_codes
+
 ENABLE_MEMBERSHIP_CHECK = True
-ALLOWED_RARITIES = [2, 3, 4]
 
+def generate_coin_code(length: int = 8) -> str:
+   alphabet = string.ascii_uppercase + string.digits
+   alphabet = alphabet.replace('0', '').replace('O', '').replace('I', '').replace('L', '').replace('1', '')
+   random_part = ''.join(secrets.choice(alphabet) for _ in range(length))
+   return f"COIN-{random_part}"
 
-async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def claim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
    chat_id = update.effective_chat.id
    user_id = update.effective_user.id
 
@@ -188,103 +192,157 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
        )
        return
 
-   lock = get_lock(user_id, "sclaim")
+   lock = get_lock(user_id, "claim")
    async with lock:
-       can_claim = await check_cooldown(user_id, "sclaim")
+       can_claim = await check_cooldown(user_id, "claim")
        if not can_claim:
-           remaining_time = await get_cooldown_time(user_id, "sclaim")
+           remaining_time = await get_cooldown_time(user_id, "claim")
            await send_cooldown_message(update, remaining_time)
            return
 
-       all_chars = await collection.find({}).to_list(None)
-       
-       matching_chars = []
-       for char in all_chars:
-           char_rarity = char.get("rarity", 1)
-           rarity_int = get_rarity_from_string(char_rarity)
-           
-           if rarity_int in ALLOWED_RARITIES:
-               matching_chars.append(char)
+       coin_amount = random.randint(1000, 3000)
+       coin_code = generate_coin_code()
 
-       if not matching_chars:
+       max_attempts = 10
+       for _ in range(max_attempts):
+           if not await claim_codes_collection.find_one({"code": coin_code}):
+               break
+           coin_code = generate_coin_code()
+
+       now = datetime.now(timezone.utc)
+
+       try:
+           await claim_codes_collection.insert_one({
+               "code": coin_code,
+               "user_id": user_id,
+               "amount": coin_amount,
+               "created_at": now,
+               "is_redeemed": False
+           })
+       except Exception as e:
+           LOGGER.error(f"Failed to insert coin code: {e}")
            await update.message.reply_text(
-               f"❌ {to_small_caps('No characters available at the moment!')}"
+               f"❌ {to_small_caps('Failed to generate code. Please try again.')}"
            )
            return
 
-       character = random.choice(matching_chars)
-       character_id = character.get("id")
-       character_name = character.get("name", "Unknown")
-       anime_name = character.get("anime", "Unknown")
-       rarity = get_rarity_from_string(character.get("rarity", 1))
-       img_url = character.get("img_url", "")
-
-       from datetime import datetime, timezone
-       now = datetime.now(timezone.utc)
-       result = await user_collection.update_one(
-           {
-               "id": user_id,
-               "$or": [
-                   {f"last_sclaim": {"$exists": False}},
-                   {f"last_sclaim": {"$lte": now - timedelta(hours=24)}}
-               ]
-           },
-           {
-               "$push": {
-                   "characters": {
-                       "id": character_id,
-                       "name": character_name,
-                       "anime": anime_name,
-                       "rarity": rarity,
-                       "img_url": img_url
-                   }
-               },
-               "$set": {"last_sclaim": now}
-           },
+       await user_collection.update_one(
+           {"id": user_id},
+           {"$set": {"last_claim": now}},
            upsert=True
        )
 
-       if result.matched_count == 0 and result.upserted_id is None:
-           remaining_time = await get_cooldown_time(user_id, "sclaim")
-           await send_cooldown_message(update, remaining_time)
-           return
-
-       rarity_display = get_rarity_display(rarity)
-
-       message = (
-           f"<b>🎉 {to_small_caps('CONGRATULATIONS!')}</b>\n\n"
-           f"🎴 <b>{to_small_caps('Character:')}</b> {escape(character_name)}\n"
-           f"📺 <b>{to_small_caps('Anime:')}</b> {escape(anime_name)}\n"
-           f"⭐ <b>{to_small_caps('Rarity:')}</b> {rarity_display}\n"
-           f"🆔 <b>{to_small_caps('ID:')}</b> {character_id}\n\n"
-           f"✅ {to_small_caps('Character has been added to your collection!')}"
+       await update.message.reply_text(
+           f"<b>💰 {to_small_caps('COIN CODE GENERATED!')}</b>\n\n"
+           f"🎟️ <b>{to_small_caps('Your Code:')}</b> <code>{coin_code}</code>\n"
+           f"💎 <b>{to_small_caps('Amount:')}</b> {coin_amount:,} {to_small_caps('coins')}\n\n"
+           f"📌 {to_small_caps('Use')} <code>/credeem {coin_code}</code> {to_small_caps('to claim your coins!')}\n"
+           f"⏰ {to_small_caps('Valid till Midnight IST')}",
+           parse_mode="HTML"
        )
 
-       if img_url:
-           try:
-               await update.message.reply_photo(
-                   photo=img_url,
-                   caption=message,
+       LOGGER.debug(f"User {user_id} generated coin code {coin_code} for {coin_amount} coins")
+
+
+async def credeem_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+   user_id = update.effective_user.id
+
+   if len(context.args) < 1:
+       usage_msg = (
+           f"<b>🎁 {to_small_caps('REDEEM CODE')}</b>\n\n"
+           f"📝 {to_small_caps('Usage:')} <code>/credeem &lt;CODE&gt;</code>\n\n"
+           f"💡 {to_small_caps('Redeem your coin codes to add coins to your balance!')}"
+       )
+       await update.message.reply_text(usage_msg, parse_mode="HTML")
+       return
+
+   code = context.args[0].upper()
+
+   lock = get_lock(user_id, f"redeem_{code}")
+   async with lock:
+       code_doc = await claim_codes_collection.find_one({
+           "code": code,
+           "user_id": user_id
+       })
+
+       if not code_doc:
+           await update.message.reply_text(
+               f"<b>❌ {to_small_caps('INVALID CODE')}</b>\n\n"
+               f"⚠️ {to_small_caps('This code does not exist or does not belong to you.')}\n\n"
+               f"💡 {to_small_caps('Use /claim to generate a new code!')}",
+               parse_mode="HTML"
+           )
+           return
+
+       if code_doc.get("is_redeemed", False):
+           await update.message.reply_text(
+               f"<b>❌ {to_small_caps('CODE ALREADY REDEEMED')}</b>\n\n"
+               f"⚠️ {to_small_caps('This code has already been used.')}\n\n"
+               f"💡 {to_small_caps('Use /claim to generate a new code!')}",
+               parse_mode="HTML"
+           )
+           return
+
+       created_at = _normalize_datetime(code_doc.get("created_at"))
+       if created_at:
+           # Credeem codes generated by claim also expire at midnight IST conceptually now
+           # Check if it was generated on the same IST day
+           now_utc = datetime.now(timezone.utc)
+           if not is_same_ist_day(created_at, now_utc):
+               await update.message.reply_text(
+                   f"<b>❌ {to_small_caps('CODE EXPIRED')}</b>\n\n"
+                   f"⚠️ {to_small_caps('This code expired at midnight.')}\n\n"
+                   f"💡 {to_small_caps('Use /claim to generate a new code!')}",
                    parse_mode="HTML"
                )
-           except Exception as e:
-               LOGGER.error(f"Failed to send image: {e}")
-               await update.message.reply_text(message, parse_mode="HTML")
-       else:
-           await update.message.reply_text(message, parse_mode="HTML")
+               return
 
-       LOGGER.debug(f"User {user_id} claimed character {character_id} ({character_name}) via /sclaim")
+       coin_amount = code_doc.get("amount", 0)
+       now = datetime.now(timezone.utc)
 
+       redeem_result = await claim_codes_collection.update_one(
+           {
+               "code": code,
+               "user_id": user_id,
+               "is_redeemed": False
+           },
+           {"$set": {"is_redeemed": True, "redeemed_at": now}}
+       )
+
+       if redeem_result.matched_count == 0:
+           await update.message.reply_text(
+               f"<b>❌ {to_small_caps('CODE ALREADY REDEEMED')}</b>\n\n"
+               f"⚠️ {to_small_caps('This code has already been used.')}\n\n"
+               f"💡 {to_small_caps('Use /claim to generate a new code!')}",
+               parse_mode="HTML"
+           )
+           return
+
+       user_result = await user_collection.find_one_and_update(
+           {"id": user_id},
+           {
+               "$inc": {"balance": coin_amount},
+               "$set": {"last_credeem": now}
+           },
+           upsert=True,
+           return_document=True
+       )
+
+       new_balance = user_result.get("balance", 0) if user_result else coin_amount
+
+       await update.message.reply_text(
+           f"<b>✅ {to_small_caps('CODE REDEEMED SUCCESSFULLY!')}</b>\n\n"
+           f"💰 <b>{to_small_caps('Coins Added:')}</b> {coin_amount:,}\n"
+           f"💎 <b>{to_small_caps('New Balance:')}</b> {new_balance:,} {to_small_caps('coins')}\n\n"
+           f"🎉 {to_small_caps('Enjoy your coins!')}",
+           parse_mode="HTML"
+       )
+
+       LOGGER.debug(f"User {user_id} redeemed code {code} for {coin_amount} coins")
 
 def register_handlers():
-   application.add_handler(CommandHandler("sclaim", sclaim_command, block=False))
-   LOGGER.info("Sclaim system handler registered successfully")
-
+   application.add_handler(CommandHandler("claim", claim_command, block=False))
+   application.add_handler(CommandHandler("credeem", credeem_command, block=False))
+   LOGGER.info("Claim system handlers registered successfully")
 
 register_handlers()
-
-# (c) @SenpaiLabs
-# SenpaiLabs Developer 
-# Don't Remove Credit 😔
-# Telegram Channel @Senpai_Updates & @THE_DRAGON_SUPPORT
-# Developer @SenpaiLabs
