@@ -35,6 +35,14 @@ if REDIS_AVAILABLE:
     except:
         pass
 
+# FIX: Per-user locks to prevent concurrent harem edits for the same user
+_harem_locks: Dict[int, asyncio.Lock] = {}
+
+def get_harem_lock(user_id: int) -> asyncio.Lock:
+    if user_id not in _harem_locks:
+        _harem_locks[user_id] = asyncio.Lock()
+    return _harem_locks[user_id]
+
 # Build EMOJI_TO_RARITY from utils for backwards-compat
 EMOJI_TO_RARITY = {}
 for num in RARITY_EMOJIS:
@@ -365,6 +373,9 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                     )
                 except Exception as e:
                     error_text = str(e).lower()
+                    if "canceled by new editmessagemedia request" in error_text:
+                        # FIX: A newer request already updated the message — safe to ignore
+                        return
                     if (
                         "there is no caption in the message to edit" in error_text
                         or "there is no media in the message to edit" in error_text
@@ -390,6 +401,9 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
                     await update.callback_query.edit_message_text(text=harem_msg, reply_markup=markup, parse_mode='HTML')
                 except Exception as e:
                     error_text = str(e).lower()
+                    if "canceled by new editmessagemedia request" in error_text:
+                        # FIX: A newer request already updated the message — safe to ignore
+                        return
                     if "there is no text in the message to edit" in error_text or "message to edit not found" in error_text:
                         try:
                             await update.callback_query.message.delete()
@@ -405,6 +419,9 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     except Exception as e:
         error_text = str(e).lower()
         if "message is not modified" in error_text:
+            pass
+        elif "canceled by new editmessagemedia request" in error_text:
+            # FIX: A newer request already updated the message — safe to ignore
             pass
         elif "message to edit not found" in error_text or "query is too old" in error_text:
             try:
@@ -439,7 +456,14 @@ async def harem_callback_v3(update: Update, context: CallbackContext):
         return
     
     await query.answer()
-    await harem_v3(update, context, page)
+
+    # FIX: Acquire per-user lock — if already processing, skip this click (user clicked too fast)
+    lock = get_harem_lock(user_id)
+    if lock.locked():
+        return
+
+    async with lock:
+        await harem_v3(update, context, page)
 
 async def harem_close_callback(update: Update, context: CallbackContext):
     query = update.callback_query
