@@ -220,7 +220,7 @@ async def inlinequery(update: Update, context: CallbackContext) -> None:
             anime_totals = {}
         
         results = []
-        for char in characters:
+        for i, char in enumerate(characters):  # FIX: added enumerate for unique result IDs
             rarity_val = char.get('rarity')
             rarity_display = get_rarity_display(rarity_val)
             
@@ -247,7 +247,8 @@ async def inlinequery(update: Update, context: CallbackContext) -> None:
                 )
             
             image_url = get_character_image_url(char)
-            result_id = f"{'c' if is_collection_query else 's'}_{user_id or 0}_{char['id']}_{offset}"
+            # FIX: appended _{i} to guarantee uniqueness within a single answer() call
+            result_id = f"{'c' if is_collection_query else 's'}_{user_id or 0}_{char['id']}_{offset}_{i}"
 
             if image_url:
                 results.append(
