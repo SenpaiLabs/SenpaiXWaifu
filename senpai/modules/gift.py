@@ -64,8 +64,8 @@ async def is_bot_or_channel(client, user_id):
             user = await client.get_users(user_id)
             if user.is_bot:
                 return True, "bot"
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to check if user {user_id} is bot: {e}")
         return False, None
     except Exception as e:
         logger.error(f"Error checking if user {user_id} is bot/channel: {e}")
@@ -86,7 +86,7 @@ async def safe_store_recovery(character, context):
 
 async def atomic_transfer_character(sender_id, receiver_id, character_id):
     character_id = normalize_character_id(character_id)
-    if sender_char_id is None:
+    if character_id is None:
         return False, "Invalid character ID"
 
     sender = await user_collection.find_one({'id': sender_id})
@@ -306,11 +306,11 @@ async def trade(client, message):
 
     character_id = sender_char_id
     if sender_char_id is None or receiver_char_id is None:
-        await message.reply_text("âŒ Please provide valid character IDs!")
+        await message.reply_text("❌ Please provide valid character IDs!")
         return
 
     if character_id is None:
-        await message.reply_text("âŒ Please provide a valid character ID!")
+        await message.reply_text("❌ Please provide a valid character ID!")
         return
 
     try:
@@ -406,8 +406,8 @@ async def on_trade_callback(client, callback_query):
 
             try:
                 await callback_query.message.edit_reply_markup(reply_markup=None)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to remove trade reply markup: {e}")
 
             del pending_trades[trade_key]
 
@@ -684,8 +684,8 @@ async def on_gift_callback(client, callback_query):
 
             try:
                 await callback_query.message.edit_reply_markup(reply_markup=None)
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to remove gift reply markup: {e}")
 
             del pending_gifts[gift_key]
 
@@ -800,7 +800,7 @@ async def check_pending(client, message):
 @senpaii.on_message(filters.command("clearpending"))
 async def clear_pending(client, message):
     if not message.from_user or not is_owner(message.from_user.id):
-        await message.reply_text("âŒ You are not authorized to clear pending operations.")
+        await message.reply_text("❌ You are not authorized to clear pending operations.")
         return
 
     pending_trades.clear()

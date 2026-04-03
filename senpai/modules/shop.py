@@ -14,7 +14,7 @@ from pymongo import ReturnDocument
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto
 from telegram.ext import CommandHandler, CallbackContext, CallbackQueryHandler
 
-from senpai import collection, user_collection, application
+from senpai import collection, user_collection, application, LOGGER
 from senpai.character_ids import (
     character_id_query,
     normalize_character_document,
@@ -120,7 +120,7 @@ async def add_character_to_user(user_id: int, character: dict) -> bool:
         )
         return True
     except Exception as e:
-        print(f"Error adding character to user: {e}")
+        LOGGER.warning(f"Error adding character to user: {e}")
         return False
 
 
@@ -311,7 +311,8 @@ async def display_shop_character(update: Update, context: CallbackContext,
         else:
             try:
                 await update.callback_query.edit_message_caption(caption=message)
-            except:
+            except Exception as e:
+                LOGGER.warning(f"Failed to edit shop caption, trying text: {e}")
                 await update.callback_query.edit_message_text(message)
         return
 
@@ -469,7 +470,7 @@ async def display_shop_character(update: Update, context: CallbackContext,
                         reply_markup=reply_markup
                     )
             except Exception as e2:
-                print(f"Error in display_shop_character: {e2}")
+                LOGGER.warning(f"Error in display_shop_character fallback: {e2}")
                 # Last resort: just answer the callback
                 await query.answer("Error displaying shop. Please use /shop again.")
 
@@ -582,7 +583,8 @@ async def shop_callback(update: Update, context: CallbackContext) -> None:
 
         try:
             await query.message.delete()
-        except:
+        except Exception as e:
+            LOGGER.warning(f"Failed to delete shop message, editing instead: {e}")
             await query.edit_message_text(to_small_caps("Shop closed."))
         await query.answer()
 
@@ -690,7 +692,7 @@ async def show_purchase_confirmation(update: Update, context: CallbackContext,
                 reply_markup=reply_markup
             )
         except Exception as e2:
-            print(f"Error in show_purchase_confirmation: {e2}")
+            LOGGER.warning(f"Error in show_purchase_confirmation fallback: {e2}")
 
 
 async def process_purchase(update: Update, context: CallbackContext,
@@ -791,7 +793,7 @@ async def process_purchase(update: Update, context: CallbackContext,
                         reply_markup=reply_markup
                     )
                 except Exception as e2:
-                    print(f"Error in process_purchase: {e2}")
+                    LOGGER.warning(f"Error in process_purchase fallback: {e2}")
 
         await query.answer(to_small_caps("✅ Purchase successful!"), show_alert=True)
     else:

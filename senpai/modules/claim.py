@@ -80,7 +80,8 @@ def _normalize_datetime(dt):
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-        except:
+        except Exception as e:
+            LOGGER.warning(f"Failed to parse datetime string '{dt}': {e}")
             return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

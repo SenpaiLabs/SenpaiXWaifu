@@ -12,7 +12,7 @@ import textwrap
 import traceback
 from contextlib import redirect_stdout
 
-from senpai import application, LOGGER
+from senpai import application, LOGGER, GROUP_ID
 from senpai.security import can_use_eval
 from telegram import Update
 from telegram.constants import ChatID, ParseMode
@@ -64,12 +64,20 @@ async def evaluate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not can_use_eval(update.effective_message.from_user.id):
         return
 
+    # Also verify command is used in private chat or owner's known group
+    if update.effective_chat.type not in ['private'] and update.effective_chat.id != GROUP_ID:
+        return
+
     bot = context.bot
     await send(await do(eval, bot, update), bot, update)
 
 
 async def execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not can_use_eval(update.effective_message.from_user.id):
+        return
+
+    # Also verify command is used in private chat or owner's known group
+    if update.effective_chat.type not in ['private'] and update.effective_chat.id != GROUP_ID:
         return
 
     bot = context.bot
@@ -114,8 +122,8 @@ async def do(func, bot, update):
             else:
                 try:
                     result = f"{repr(eval(body, env))}"
-                except:
-                    pass
+                except Exception as e:
+                    LOGGER.warning(f"Failed to eval body in do(): {e}")
         else:
             result = f"{value}{func_return}"
         if result:
@@ -124,6 +132,10 @@ async def do(func, bot, update):
 
 async def clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not can_use_eval(update.effective_message.from_user.id):
+        return
+
+    # Also verify command is used in private chat or owner's known group
+    if update.effective_chat.type not in ['private'] and update.effective_chat.id != GROUP_ID:
         return
 
     bot = context.bot

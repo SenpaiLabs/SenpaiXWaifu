@@ -20,7 +20,7 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
-from senpai import collection, user_collection, application
+from senpai import collection, user_collection, application, LOGGER
 from senpai.character_ids import expand_character_id_variants, normalize_character_id
 from senpai.media import get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, RARITY_MAP, get_rarity_from_string
@@ -32,8 +32,8 @@ redis_client = None
 if REDIS_AVAILABLE:
     try:
         redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-    except:
-        pass
+    except Exception as e:
+        LOGGER.warning(f"Failed to initialize Redis client: {e}")
 
 # FIX: Per-user locks to prevent concurrent harem edits for the same user
 _harem_locks: Dict[int, asyncio.Lock] = {}
@@ -90,8 +90,8 @@ def cached(ttl_seconds: int = CACHE_TTL):
                 if cached_data:
                     import json
                     return json.loads(cached_data)
-            except:
-                pass
+            except Exception as e:
+                LOGGER.warning(f"Redis cache get failed: {e}")
             
             result = await func(*args, **kwargs)
             
@@ -99,8 +99,8 @@ def cached(ttl_seconds: int = CACHE_TTL):
                 if result is not None:
                     import json
                     await redis_client.setex(cache_key, ttl_seconds, json.dumps(result, default=str))
-            except:
-                pass
+            except Exception as e:
+                LOGGER.warning(f"Redis cache set failed: {e}")
             
             return result
         return wrapper
@@ -204,8 +204,8 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
         rarity_filter = await get_user_sort_preference(user_id)
         if rarity_filter:
             rarity_filter = int(rarity_filter)
-    except:
-        pass
+    except Exception as e:
+        LOGGER.warning(f"Failed to get user sort preference: {e}")
     
     user, user_chars = await HaremManagerV3.get_user_characters_fast(user_id, rarity_filter)
     
@@ -437,8 +437,8 @@ async def _send_message(update: Update, text: str, markup=None):
     else:
         try:
             await update.callback_query.edit_message_text(text, reply_markup=markup, parse_mode='HTML')
-        except:
-            pass
+        except Exception as e:
+            LOGGER.warning(f"Failed to edit message text in _send_message: {e}")
 
 async def harem_callback_v3(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -447,7 +447,8 @@ async def harem_callback_v3(update: Update, context: CallbackContext):
     try:
         _, page, user_id = data.split(':')
         page, user_id = int(page), int(user_id)
-    except:
+    except Exception as e:
+        LOGGER.warning(f"Failed to parse harem callback data: {e}")
         await query.answer(to_small_caps("Invalid"), show_alert=True)
         return
     
@@ -471,7 +472,8 @@ async def harem_close_callback(update: Update, context: CallbackContext):
     try:
         _, user_id = query.data.split(':')
         user_id = int(user_id)
-    except:
+    except Exception as e:
+        LOGGER.warning(f"Failed to parse harem close callback data: {e}")
         await query.answer("Invalid", show_alert=True)
         return
         
@@ -482,8 +484,8 @@ async def harem_close_callback(update: Update, context: CallbackContext):
     await query.answer()
     try:
         await query.message.delete()
-    except:
-        pass
+    except Exception as e:
+        LOGGER.warning(f"Failed to delete harem message: {e}")
 
 application.add_handler(CommandHandler(["harem", "collection"], harem_v3, block=False))
 application.add_handler(CallbackQueryHandler(harem_callback_v3, pattern=r'^harem:', block=False))

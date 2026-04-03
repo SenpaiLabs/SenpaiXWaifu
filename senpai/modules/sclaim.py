@@ -17,7 +17,7 @@ from telegram.ext import ContextTypes, CommandHandler
 
 from senpai import application, user_collection, collection, db, LOGGER
 from senpai.media import copy_character_media_fields, get_character_media_reference
-from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display, get_rarity_from_string
+from senpai.utils import to_small_caps, RARITY_MAP, get_rarity_display, get_rarity_from_string, RARITY_EMOJIS, RARITY_NAMES
 from senpai.config import Config
 SUPPORT_GROUP = f"https://t.me/{Config.SUPPORT_CHAT}"
 SUPPORT_CHANNEL = f"https://t.me/{Config.UPDATE_CHAT}"
@@ -82,7 +82,8 @@ def _normalize_datetime(dt):
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt.replace('Z', '+00:00'))
-        except:
+        except Exception as e:
+            LOGGER.warning(f"Failed to parse datetime string '{dt}': {e}")
             return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -197,15 +198,22 @@ async def sclaim_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
            await send_cooldown_message(update, remaining_time)
            return
 
-       all_chars = await collection.find({}).to_list(None)
-       
-       matching_chars = []
-       for char in all_chars:
-           char_rarity = char.get("rarity", 1)
-           rarity_int = get_rarity_from_string(char_rarity)
-           
-           if rarity_int in ALLOWED_RARITIES:
-               matching_chars.append(char)
+       # Build rarity variants for MongoDB $in query (int, string, emoji, name forms)
+       rarity_variants = []
+       for r in ALLOWED_RARITIES:
+           rarity_variants.append(r)           # int: 2, 3, 4
+           rarity_variants.append(str(r))       # str: "2", "3", "4"
+           emoji = RARITY_EMOJIS.get(r, '')
+           name = RARITY_NAMES.get(r, '')
+           if emoji:
+               rarity_variants.append(emoji)
+           if name:
+               rarity_variants.append(name)
+
+       matching_chars = await collection.find(
+           {"rarity": {"$in": rarity_variants}},
+           {"id": 1, "name": 1, "anime": 1, "rarity": 1, "img_url": 1, "tg_file_id": 1, "_id": 0}
+       ).to_list(None)
 
        if not matching_chars:
            await update.message.reply_text(
