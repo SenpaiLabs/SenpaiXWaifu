@@ -97,7 +97,7 @@ async def ckill_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not target_name:
         target_name = previous_doc.get("first_name")
 
-    LOGGER.info(
+    LOGGER.debug(
         "Balance cleared by %s for target %s (previous balance=%s)",
         actor_id,
         target_id,
@@ -157,7 +157,7 @@ async def kill_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not target_name:
         target_name = previous_doc.get("first_name")
 
-    LOGGER.info(
+    LOGGER.debug(
         "Collection cleared by %s for target %s (characters=%s, favorites=%s)",
         actor_id,
         target_id,

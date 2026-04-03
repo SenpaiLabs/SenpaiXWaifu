@@ -21,6 +21,7 @@ except ImportError:
     REDIS_AVAILABLE = False
 
 from senpai import collection, user_collection, application
+from senpai.character_ids import expand_character_id_variants, normalize_character_id
 from senpai.media import get_character_media_reference
 from senpai.utils import to_small_caps, RARITY_EMOJIS, RARITY_NAMES, RARITY_MAP, get_rarity_from_string
 
@@ -136,7 +137,16 @@ class HaremManagerV3:
         if not char_ids:
             return {}
         
-        unique_ids = list(set(char_ids))
+        normalized_ids = []
+        for char_id in char_ids:
+            normalized_id = normalize_character_id(char_id)
+            if normalized_id is not None and normalized_id not in normalized_ids:
+                normalized_ids.append(normalized_id)
+
+        if not normalized_ids:
+            return {}
+
+        lookup_ids = expand_character_id_variants(normalized_ids)
         
         projection = {
             "id": 1, 
@@ -149,13 +159,15 @@ class HaremManagerV3:
         }
         
         cursor = collection.find(
-            {"id": {"$in": unique_ids}},
+            {"id": {"$in": lookup_ids}},
             projection
         )
         
         char_map = {}
         async for char in cursor:
-            char_map[char['id']] = char
+            normalized_id = normalize_character_id(char.get('id'))
+            if normalized_id is not None and normalized_id not in char_map:
+                char_map[normalized_id] = char
         
         return char_map
     
@@ -208,15 +220,24 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     unique_char_ids = []
     seen = set()
     user_rarity_map = {}
+    user_character_map = {}
     
     for char in user_chars:
-        cid = char.get('id')
-        if cid:
-            char_id_counts[cid] = char_id_counts.get(cid, 0) + 1
-            if cid not in seen:
-                seen.add(cid)
-                unique_char_ids.append(cid)
-            user_rarity_map[cid] = parse_rarity(char.get('rarity'))
+        cid = normalize_character_id(char.get('id'))
+        if cid is None:
+            continue
+
+        char_id_counts[cid] = char_id_counts.get(cid, 0) + 1
+        if cid not in seen:
+            seen.add(cid)
+            unique_char_ids.append(cid)
+        user_rarity_map[cid] = parse_rarity(char.get('rarity'))
+
+        existing = user_character_map.get(cid, {})
+        merged_user_data = dict(existing)
+        merged_user_data.update(char)
+        merged_user_data['id'] = cid
+        user_character_map[cid] = merged_user_data
     
     total_unique = len(unique_char_ids)
     total_pages = max(1, math.ceil(total_unique / PAGE_SIZE))
@@ -230,19 +251,26 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     
     display_chars = []
     for cid in page_ids:
-        if cid in char_details:
-            char_data = char_details[cid].copy()
-            char_data['count'] = char_id_counts[cid]
-            
-            user_rarity = user_rarity_map.get(cid, 1)
-            name_rarity = extract_rarity_from_name(char_data.get('name', ''))
-            
-            if name_rarity != 1:
-                char_data['rarity'] = name_rarity
-            else:
-                char_data['rarity'] = user_rarity
-            
-            display_chars.append(char_data)
+        char_data = user_character_map.get(cid, {}).copy()
+        db_char_data = char_details.get(cid)
+        if db_char_data:
+            char_data.update(db_char_data)
+
+        if not char_data:
+            continue
+
+        char_data['id'] = cid
+        char_data['count'] = char_id_counts[cid]
+        
+        user_rarity = user_rarity_map.get(cid, 1)
+        name_rarity = extract_rarity_from_name(char_data.get('name', ''))
+        
+        if name_rarity != 1:
+            char_data['rarity'] = name_rarity
+        else:
+            char_data['rarity'] = user_rarity
+        
+        display_chars.append(char_data)
     
     display_chars.sort(key=lambda x: x.get('anime', ''))
     
@@ -311,11 +339,11 @@ async def harem_v3(update: Update, context: CallbackContext, page: int = 0):
     
     photo_url = None
     if user.get('favorites'):
-        fav_id = user['favorites'][0]
-        favorite_character = char_details.get(fav_id)
+        fav_id = normalize_character_id(user['favorites'][0])
+        favorite_character = char_details.get(fav_id) or user_character_map.get(fav_id)
         if not favorite_character:
             favorite_details = await HaremManagerV3.get_character_details_batch([fav_id])
-            favorite_character = favorite_details.get(fav_id)
+            favorite_character = favorite_details.get(fav_id) or user_character_map.get(fav_id)
         if favorite_character:
             photo_url = get_character_media_reference(favorite_character)
     

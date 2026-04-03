@@ -167,7 +167,7 @@ async def transfer_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    LOGGER.info(
+    LOGGER.debug(
         "Collection transferred by %s from source %s to target %s (characters=%s)",
         actor_id,
         source_id,
