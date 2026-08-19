@@ -1,8 +1,9 @@
 import { Telegraf } from 'telegraf';
 import { SenpaiContext } from '../core/bot';
+import { languageMiddleware } from '../utils/locales';
 
 export function register(bot: Telegraf<SenpaiContext>) {
-    bot.on('inline_query', async (ctx) => {
+    bot.on('inline_query', languageMiddleware(), async (ctx) => {
         const query = ctx.inlineQuery.query;
 
         const results = [

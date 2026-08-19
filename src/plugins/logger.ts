@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import { SenpaiContext } from '../core/bot';
 import { mongodb } from '../core/mongo';
+import { languageMiddleware } from '../utils/locales';
 
 export function register(bot: Telegraf<SenpaiContext>) {
-    bot.on('new_chat_members', async (ctx) => {
+    bot.on('new_chat_members', languageMiddleware(), async (ctx) => {
         const newMembers = ctx.message.new_chat_members;
         const botId = ctx.botInfo.id;
         
@@ -22,7 +23,7 @@ export function register(bot: Telegraf<SenpaiContext>) {
         }
     });
 
-    bot.on('left_chat_member', async (ctx) => {
+    bot.on('left_chat_member', languageMiddleware(), async (ctx) => {
         const leftMember = ctx.message.left_chat_member;
         const botId = ctx.botInfo.id;
 

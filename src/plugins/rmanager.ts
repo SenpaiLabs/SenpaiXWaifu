@@ -3,9 +3,10 @@ import { SenpaiContext } from '../core/bot';
 import { mongodb } from '../core/mongo';
 import { sudoCheck } from '../utils/decorators';
 import { formatString } from './ping';
+import { languageMiddleware } from '../utils/locales';
 
 export function register(bot: Telegraf<SenpaiContext>) {
-    bot.command('set_on', sudoCheck, async (ctx) => {
+    bot.command('set_on', sudoCheck, languageMiddleware(), async (ctx) => {
         const text = ctx.message.text;
         const tokens = text.split(' ');
         if (tokens.length < 2) {
@@ -34,7 +35,7 @@ export function register(bot: Telegraf<SenpaiContext>) {
         }
     });
 
-    bot.command('set_off', sudoCheck, async (ctx) => {
+    bot.command('set_off', sudoCheck, languageMiddleware(), async (ctx) => {
         const text = ctx.message.text;
         const tokens = text.split(' ');
         if (tokens.length < 2) {

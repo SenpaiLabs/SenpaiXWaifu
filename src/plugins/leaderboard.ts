@@ -1,9 +1,10 @@
 import { Telegraf } from 'telegraf';
 import { SenpaiContext } from '../core/bot';
 import { mongodb } from '../core/mongo';
+import { languageMiddleware } from '../utils/locales';
 
 export function register(bot: Telegraf<SenpaiContext>) {
-    bot.command(['top', 'leaderboard'], async (ctx) => {
+    bot.command(['top', 'leaderboard'], languageMiddleware(), async (ctx) => {
         const users = await mongodb.users.find({}).toArray();
         if (!users || users.length === 0) {
             return await ctx.reply(ctx.lang.leaderboard_1);
