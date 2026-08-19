@@ -1,4 +1,4 @@
-import { Telegraf } from 'telegraf';
+import { Telegraf, Markup } from 'telegraf';
 import { SenpaiContext } from '../core/bot';
 import { languageMiddleware } from '../utils/locales';
 import { mongodb } from '../core/mongo';
@@ -27,6 +27,10 @@ export function register(bot: Telegraf<SenpaiContext>) {
             text += formatString(ctx.lang.harem_footer, characters.length - 15);
         }
 
-        await ctx.reply(text, { parse_mode: 'Markdown' });
+        const keyboard = Markup.inlineKeyboard([
+            [Markup.button.switchInlineQueryCurrentChat("🔍 Search My Harem", "collection ")]
+        ]);
+
+        await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
     });
 }
