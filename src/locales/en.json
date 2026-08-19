@@ -70,7 +70,7 @@
     "leaderboard_2": "<b>Top Global Harems:</b>\n\n{0}",
     "leaderboard_3": "Unknown",
     "leaderboard_4": "characters",
-    "upload_1": "Format: `/upload img_url character-name anime-name rarity-number`",
+    "upload_1": "<b>How to upload:</b>\n\n<b>1. Reply to Photo:</b>\n<code>/upload\nName\nAnime\nRarity</code>\n\n<b>2. Without Photo (URL):</b>\n<code>/upload\nhttp://img.url\nName\nAnime\nRarity</code>",
     "upload_2": "Format: `/delete <character_id>`",
     "iquery_1": "Search Character",
     "iquery_2": "Inline searching is currently being updated to Anony style.",
