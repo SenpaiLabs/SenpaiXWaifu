@@ -5,7 +5,7 @@ const logFile = path.join(process.cwd(), 'log.txt');
 
 function formatMessage(level: string, message: string): string {
     const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    return `${timestamp} - ${level} - bot - ${message}\n`;
+    return `${timestamp} - ${level} - senpai - ${message}\n`;
 }
 
 function writeLog(level: string, message: string) {
