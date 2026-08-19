@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node --dns-result-order=ipv4first dist/index.js"
   },
   "dependencies": {
     "telegraf": "^4.16.0",

@@ -9,10 +9,10 @@ class Config {
     START_IMG: string;
 
     constructor() {
-        this.BOT_TOKEN = process.env.BOT_TOKEN || "";
-        this.MONGO_URL = process.env.MONGO_URL || "";
-        this.OWNER_ID = parseInt(process.env.OWNER_ID || "0", 10);
-        this.START_IMG = process.env.START_IMG || "";
+        this.BOT_TOKEN = (process.env.BOT_TOKEN || "").trim();
+        this.MONGO_URL = (process.env.MONGO_URL || "").trim();
+        this.OWNER_ID = parseInt((process.env.OWNER_ID || "0").trim(), 10);
+        this.START_IMG = (process.env.START_IMG || "").trim();
     }
 
     check() {
