@@ -111,6 +111,18 @@ class MongoDB {
         return await this.characters.find({}).toArray();
     }
 
+    async searchCharacters(query: string, limit: number = 50): Promise<Character[]> {
+        if (!query) {
+            return await this.characters.find({}).limit(limit).toArray();
+        }
+        return await this.characters.find({
+            $or: [
+                { name: { $regex: query, $options: "i" } },
+                { anime: { $regex: query, $options: "i" } }
+            ]
+        }).limit(limit).toArray();
+    }
+
     async getUser(user_id: number): Promise<User | null> {
         return await this.users.findOne({ id: user_id });
     }

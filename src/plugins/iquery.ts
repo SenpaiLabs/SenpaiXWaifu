@@ -24,15 +24,8 @@ export function register(bot: Telegraf<SenpaiContext>) {
                 }
             }
         } else {
-            // Search global database
-            const allCharacters = await mongodb.getAllCharacters();
-            characters = allCharacters;
-            if (searchTerm) {
-                characters = characters.filter(c => 
-                    c.name.toLowerCase().includes(searchTerm) || 
-                    c.anime.toLowerCase().includes(searchTerm)
-                );
-            }
+            // Search global database using optimized DB search
+            characters = await mongodb.searchCharacters(searchTerm, 50);
         }
 
         // Limit results to 50 for inline queries

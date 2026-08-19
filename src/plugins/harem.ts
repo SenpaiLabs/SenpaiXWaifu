@@ -28,7 +28,7 @@ export function register(bot: Telegraf<SenpaiContext>) {
         }
 
         const keyboard = Markup.inlineKeyboard([
-            [Markup.button.switchInlineQueryCurrentChat("🔍 Search My Harem", "collection ")]
+            [Markup.button.switchToCurrentChat("🔍 Search My Harem", "collection ")]
         ]);
 
         await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: keyboard.reply_markup });
