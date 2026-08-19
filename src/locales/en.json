@@ -1,7 +1,7 @@
 {
     "start_pm": "Konichiwa {0}! 🌸\n\nI am {1}, your ultimate Anime Companion and Character Catcher!\n\nI can spawn characters in your groups, and you can catch them using the `/guess` command to build your dream harem.\n\nClick the buttons below to explore more features!",
     "start_gp": "Konichiwa! 🌸\n\nI am {0}!\nAdd me to your group, and I'll start spawning legendary characters for you to catch and collect!",
-    "help_menu": "📚 **Help Menu**\n\nHere are the commands you can use:\n\n🎮 **Game Commands:**\n`/guess` - Catch a character\n`/harem` - View your collection\n`/trade` - Exchange characters\n`/top` - View global leaderboard\n\n⚙️ **Settings:**\n`/changetime` - Change spawn frequency\n`/ping` - Check bot status",
+    "help_menu": "📚 **Help Menu**\n\nHere are the commands you can use:\n\n🎮 **Game Commands:**\n`/guess` - Catch a character\n`/harem` - View your collection\n`/top` - View global leaderboard\n\n⚙️ **Settings:**\n`/ping` - Check bot status",
     "spawn_msg": "A Wild **{0}** Character Appeared! 🌟\n\nUse `/guess <Character Name>` to catch them and add them to your collection!",
     "guess_success": "🎉 **YATTA! {0}**\n\nYou successfully caught a new character!\n\n🏷 **Name:** {1}\n📺 **Anime:** {2}\n✨ **Rarity:** {3}\n\n*This character has been added to your harem.*",
     "guess_fail": "❌ **Baka!** That's not the correct character name. Try again!",

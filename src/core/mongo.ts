@@ -1,6 +1,5 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { config } from '../config';
-import { TTLCache } from '../utils/ttlCache';
 
 export interface Rarity {
     id: string;
@@ -40,7 +39,22 @@ class MongoDB {
     chats: Collection<Chat>;
     sudoersdb: Collection<SudoersDb>;
     rarity_settings: Collection<Rarity>;
-    cache: TTLCache<string, any>;
+    private simpleCache: Record<string, { value: any, expiresAt: number }> = {};
+    private CACHE_TTL = 600 * 1000; // 10 minutes
+
+    private getCache(key: string) {
+        const item = this.simpleCache[key];
+        if (item && Date.now() < item.expiresAt) return item.value;
+        return null;
+    }
+
+    private setCache(key: string, value: any) {
+        this.simpleCache[key] = { value, expiresAt: Date.now() + this.CACHE_TTL };
+    }
+
+    private clearCache(key: string) {
+        delete this.simpleCache[key];
+    }
 
     constructor() {
         this.mongo = new MongoClient(config.MONGO_URL);
@@ -50,7 +64,6 @@ class MongoDB {
         this.chats = this.db.collection<Chat>('chats');
         this.sudoersdb = this.db.collection<SudoersDb>('sudoersdb');
         this.rarity_settings = this.db.collection<Rarity>('rarity_settings');
-        this.cache = new TTLCache<string, any>(600 * 1000); // 10 min cache
     }
 
     async connect() {
@@ -84,13 +97,13 @@ class MongoDB {
     }
 
     async getActiveRarities(): Promise<Rarity[]> {
-        const cached = this.cache.get("active_rarities");
+        const cached = this.getCache("active_rarities");
         if (cached) {
             return cached;
         }
 
         const active = await this.rarity_settings.find({ active: true }).toArray();
-        this.cache.set("active_rarities", active);
+        this.setCache("active_rarities", active);
         return active;
     }
 
@@ -101,7 +114,7 @@ class MongoDB {
     async setRarityStatus(rarity_id: string, status: boolean): Promise<boolean> {
         const result = await this.rarity_settings.updateOne({ id: rarity_id }, { $set: { active: status } });
         if (result.modifiedCount > 0 || result.matchedCount > 0) {
-            this.cache.delete("active_rarities");
+            this.clearCache("active_rarities");
             return true;
         }
         return false;
@@ -150,19 +163,19 @@ class MongoDB {
 
     // Sudo management
     async getSudoers(): Promise<number[]> {
-        const cached = this.cache.get("sudoers");
+        const cached = this.getCache("sudoers");
         if (cached) {
             return cached;
         }
 
         const sudoers = await this.sudoersdb.findOne({ sudo: "sudo" });
         if (!sudoers) {
-            this.cache.set("sudoers", []);
+            this.setCache("sudoers", []);
             return [];
         }
 
         const sudo_list = sudoers.sudoers || [];
-        this.cache.set("sudoers", sudo_list);
+        this.setCache("sudoers", sudo_list);
         return sudo_list;
     }
 
@@ -173,7 +186,7 @@ class MongoDB {
             await this.sudoersdb.updateOne(
                 { sudo: "sudo" }, { $set: { sudoers: sudoers } }, { upsert: true }
             );
-            this.cache.set("sudoers", sudoers);
+            this.setCache("sudoers", sudoers);
         }
         return true;
     }
@@ -185,26 +198,26 @@ class MongoDB {
             await this.sudoersdb.updateOne(
                 { sudo: "sudo" }, { $set: { sudoers: sudoers } }, { upsert: true }
             );
-            this.cache.set("sudoers", sudoers);
+            this.setCache("sudoers", sudoers);
         }
         return true;
     }
 
     // Uploader management
     async getUploaders(): Promise<number[]> {
-        const cached = this.cache.get("uploaders");
+        const cached = this.getCache("uploaders");
         if (cached) {
             return cached;
         }
 
         const uploaders = await this.sudoersdb.findOne({ sudo: "uploaders" });
         if (!uploaders) {
-            this.cache.set("uploaders", []);
+            this.setCache("uploaders", []);
             return [];
         }
 
         const uploader_list = uploaders.uploaders || [];
-        this.cache.set("uploaders", uploader_list);
+        this.setCache("uploaders", uploader_list);
         return uploader_list;
     }
 
@@ -215,7 +228,7 @@ class MongoDB {
             await this.sudoersdb.updateOne(
                 { sudo: "uploaders" }, { $set: { uploaders: uploaders } }, { upsert: true }
             );
-            this.cache.set("uploaders", uploaders);
+            this.setCache("uploaders", uploaders);
         }
         return true;
     }
@@ -227,7 +240,7 @@ class MongoDB {
             await this.sudoersdb.updateOne(
                 { sudo: "uploaders" }, { $set: { uploaders: uploaders } }, { upsert: true }
             );
-            this.cache.set("uploaders", uploaders);
+            this.setCache("uploaders", uploaders);
         }
         return true;
     }
